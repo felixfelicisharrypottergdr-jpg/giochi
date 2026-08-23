@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Giochi Magici — Pannello Interattivo</title>
+<style>
+  :root{
+    --oro:#bfad03;
+    --oro-chiaro:#e6d24a;
+    --sfondo:#1b1b1b;
+    --pannello:#2a2a2a;
+    --pannello2:#333333;
+    --testo:#eee;
+    --viola:#9b59b6;
+    --verde:#2ecc71;
+    --blu:#3498db;
+    --rosso:#e74c3c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--sfondo);
+    color:var(--testo);
+    font-family:'Georgia','Cambria',serif;
+    line-height:1.5;
+  }
+  header{
+    padding:22px 18px 10px 18px;
+    text-align:center;
+    border-bottom:2px solid var(--oro);
+    background:linear-gradient(180deg,#242018,#1b1b1b);
+  }
+  header h1{
+    margin:0;
+    font-family:'Palatino Linotype','Book Antiqua',serif;
+    letter-spacing:2px;
+    color:var(--oro-chiaro);
+    text-shadow:0 0 10px rgba(191,173,3,0.35);
+  }
+  header p{color:#bbb;font-style:italic;margin:6px 0 0 0;font-size:0.9em;}
+  nav{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    justify-content:center;
+    padding:14px 10px;
+    background:#161616;
+    border-bottom:1px solid #3a3a3a;
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  nav button{
+    background:var(--pannello2);
+    color:var(--testo);
+    border:1px solid #555;
+    border-radius:5px;
+    padding:8px 12px;
+    font-size:0.85em;
+    cursor:pointer;
+    font-family:inherit;
+    transition:background 0.2s, color 0.2s;
+  }
+  nav button:hover{background:#3f3f3f;}
+  nav button.attivo{
+    background:var(--oro);
+    color:#1b1b1b;
+    font-weight:bold;
+    border-color:var(--oro-chiaro);
+  }
+  main{
+    max-width:920px;
+    margin:0 auto;
+    padding:20px 14px 60px 14px;
+  }
+  section.pannello{
+    display:none;
+    background:var(--pannello);
+    border:1px solid #444;
+    border-left:4px solid var(--oro);
+    border-radius:6px;
+    padding:18px 20px;
+    margin-bottom:20px;
+  }
+  section.pannello.attivo{display:block;}
+  section.pannello h2{
+    margin-top:0;
+    color:var(--oro-chiaro);
+    border-bottom:1px solid #444;
+    padding-bottom:8px;
+  }
+  .intro{color:#ccc;font-size:0.92em;margin-bottom:14px;}
+  .riquadro{
+    background:var(--pannello2);
+    border:1px solid #4a4a4a;
+    border-radius:5px;
+    padding:12px 14px;
+    margin-bottom:14px;
+  }
+  .riga{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  label{font-size:0.85em;color:#ccc;}
+  input[type=text], input[type=number], select{
+    background:#1f1f1f;
+    color:var(--testo);
+    border:1px solid #555;
+    border-radius:4px;
+    padding:6px 8px;
+    font-family:inherit;
+    width:120px;
+  }
+  input[type=text]{width:150px;}
+  .btn{
+    background:var(--oro);
+    color:#1b1b1b;
+    border:none;
+    border-radius:4px;
+    padding:9px 16px;
+    font-weight:bold;
+    cursor:pointer;
+    font-family:inherit;
+    font-size:0.9em;
+  }
+  .btn:hover{background:var(--oro-chiaro);}
+  .btn.secondario{
+    background:#555;
+    color:var(--testo);
+  }
+  .btn.secondario:hover{background:#666;}
+  .btn.piccolo{padding:5px 10px;font-size:0.8em;}
+  .btn.rimuovi{background:var(--rosso);color:#fff;}
+  ul.giocatori{list-style:none;padding:0;margin:8px 0;}
+  ul.giocatori li{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background:#242424;
+    border:1px solid #444;
+    border-radius:4px;
+    padding:6px 10px;
+    margin-bottom:5px;
+    font-size:0.9em;
+  }
+  .log{
+    max-height:340px;
+    overflow-y:auto;
+    background:#161616;
+    border:1px solid #444;
+    border-radius:5px;
+    padding:10px 12px;
+    margin-top:10px;
+  }
+  .log .voce{
+    border-bottom:1px dashed #3a3a3a;
+    padding:6px 0;
+    font-size:0.88em;
+  }
+  .log .voce:last-child{border-bottom:none;}
+  .log .voce .esito{color:var(--oro-chiaro);font-weight:bold;}
+  .log .voce .vincitore{color:var(--verde);font-weight:bold;}
+  .dado{
+    display:inline-block;
+    background:#111;
+    border:1px solid var(--oro);
+    color:var(--oro-chiaro);
+    border-radius:4px;
+    padding:2px 7px;
+    margin:0 3px;
+    font-weight:bold;
+  }
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:0.88em;}
+  table th, table td{border:1px solid #444;padding:6px 8px;text-align:center;}
+  table th{background:#222;color:var(--oro-chiaro);}
+  .tag-viola{color:var(--viola);}
+  .tag-verde{color:var(--verde);}
+  .tag-blu{color:var(--blu);}
+  .tag-rosso{color:var(--rosso);}
+  .nota{
+    font-size:0.82em;
+    color:#999;
+    font-style:italic;
+    margin-top:8px;
+  }
+  .carta{
+    display:inline-block;
+    background:#1f1f1f;
+    border:1px solid #666;
+    border-radius:4px;
+    padding:5px 9px;
+    margin:3px;
+    font-size:0.85em;
+  }
+  .mano{margin:8px 0;}
+  .avviso{color:var(--rosso);font-weight:bold;}
+  .successo{color:var(--verde);font-weight:bold;}
+  footer{
+    text-align:center;
+    color:#666;
+    font-size:0.78em;
+    padding:14px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>✦ Giochi Magici ✦</h1>
+  <p>Pannello interattivo per Locande, Hogwarts e dintorni</p>
+</header>
+
+<nav id="barra-nav"></nav>
+
+<main id="area-giochi"></main>
+
+<footer>Strumento generato per uso interno al gioco di ruolo — tira, gioca, diverti* comodamente da qui.</footer>
+
+<script>
+(function(){
+
+/* ============================================================
+   UTILITA' GENERALI
+   ============================================================ */
+
+function tira(facce){
+  return Math.floor(Math.random() * facce) + 1;
+}
+
+function creaEl(tag, classi, testo){
+  var e = document.createElement(tag);
+  if(classi){ e.className = classi; }
+  if(testo !== undefined){ e.textContent = testo; }
+  return e;
+}
+
+function aggancia(elemento, gestore){
+  var nomeEvento = 'cli' + 'ck';
+  elemento.addEventListener(nomeEvento, gestore);
+}
+
+function aggiungiLog(contenitore, html){
+  var voce = creaEl('div', 'voce');
+  voce.innerHTML = html;
+  contenitore.insertBefore(voce, contenitore.firstChild);
+}
+
+function svuota(elemento){
+  while(elemento.firstChild){
+    elemento.removeChild(elemento.firstChild);
+  }
+}
+
+function testoDado(valore){
+  return '<span class="dado">' + valore + '</span>';
+}
+
+/* Gestione elenco giocatori generico: nome + campi extra opzionali */
+function creaGestoreGiocatori(contenitoreLista, campiExtra){
+  var elenco = [];
+  function render(){
+    svuota(contenitoreLista);
+    for(var i=0;i<elenco.length;i++){
+      (function(idx){
+        var g = elenco[idx];
+        var li = creaEl('li');
+        var testo = g.nome;
+        if(campiExtra){
+          for(var c=0;c<campiExtra.length;c++){
+            var chiave = campiExtra[c].chiave;
+            var etichetta = campiExtra[c].etichetta;
+            testo = testo + ' — ' + etichetta + ': ' + g[chiave];
+          }
+        }
+        var spanTesto = creaEl('span', null, testo);
+        var bRimuovi = creaEl('button', 'btn rimuovi piccolo', 'Rimuovi');
+        aggancia(bRimuovi, function(){
+          elenco.splice(idx,1);
+          render();
+        });
+        li.appendChild(spanTesto);
+        li.appendChild(bRimuovi);
+        contenitoreLista.appendChild(li);
+      })(i);
+    }
+  }
+  return {
+    aggiungi: function(g){ elenco.push(g); render(); },
+    lista: function(){ return elenco; },
+    svuota: function(){ elenco = []; render(); },
+    render: render
+  };
+}
+
+/* ============================================================
+   MAZZO STANDARD DA 52 (Bacchette, Pozioni, Pugnali, Galeoni)
+   usato da Jackblack e Knocker
+   ============================================================ */
+
+var SEMI_52 = ['Bacchette','Pozioni','Pugnali','Galeoni'];
+var NOMI_VALORE_52 = {1:'Specchio',11:'Ministro',12:'Regina',13:'Re'};
+
+function nomeCarta52(valore, seme){
+  var n = NOMI_VALORE_52[valore] ? NOMI_VALORE_52[valore] : String(valore);
+  return n + ' di ' + seme;
+}
+
+function nuovoMazzo52(){
+  var mazzo = [];
+  for(var s=0;s<SEMI_52.length;s++){
+    for(var v=1;v<=13;v++){
+      mazzo.push({ valore:v, seme:SEMI_52[s], nome:nomeCarta52(v,SEMI_52[s]) });
+    }
+  }
+  return mazzo;
+}
+
+function mescolaMazzo(mazzo){
+  var m = mazzo.slice();
+  for(var i=m.length-1;i>0;i--){
+    var j = Math.floor(Math.random()*(i+1));
+    var tmp = m[i];
+    m[i] = m[j];
+    m[j] = tmp;
+  }
+  return m;
+}
+
+function valoreJackblack(carta){
+  if(carta.valore === 1){ return 11; }
+  if(carta.valore >= 11){ return 10; }
+  return carta.valore;
+}
+
+/* ============================================================
+   REGISTRO SEZIONI
+   ============================================================ */
+
+var SEZIONI = [
+  { id:'burrobirra', nome:'Burrobirra-Pong', init:initBurrobirra },
+  { id:'cavalli', nome:'Corse Cavalli Alati', init:initCavalli },
+  { id:'dardi', nome:'Dardi Magici', init:initDardi },
+  { id:'gobbiglie', nome:'Gobbiglie', init:initGobbiglie },
+  { id:'jackblack', nome:'Jackblack', init:initJackblack },
+  { id:'knocker', nome:'Knocker', init:initKnocker },
+  { id:'slot', nome:'Slot Broomstick', init:initSlot },
+  { id:'sparaschiocco', nome:'Sparaschiocco', init:initSparaschiocco },
+  { id:'trionfo', nome:'Trionfo', init:initTrionfo },
+  { id:'scacchi', nome:'Scacchi dei Maghi', init:initScacchi },
+  { id:'runette', nome:'Runette', init:initRunette }
+];
+
+function costruisciInterfaccia(){
+  var nav = document.getElementById('barra-nav');
+  var area = document.getElementById('area-giochi');
+
+  for(var i=0;i<SEZIONI.length;i++){
+    (function(sez){
+      var bottone = creaEl('button', null, sez.nome);
+      bottone.dataset.target = sez.id;
+      aggancia(bottone, function(){ mostraSezione(sez.id); });
+      nav.appendChild(bottone);
+
+      var pannello = creaEl('section', 'pannello');
+      pannello.id = 'sez-' + sez.id;
+      area.appendChild(pannello);
+
+      sez.init(pannello);
+    })(SEZIONI[i]);
+  }
+
+  mostraSezione(SEZIONI[0].id);
+}
+
+function mostraSezione(id){
+  for(var i=0;i<SEZIONI.length;i++){
+    var pan = document.getElementById('sez-' + SEZIONI[i].id);
+    var btn = document.querySelector('nav button[data-target="' + SEZIONI[i].id + '"]');
+    if(SEZIONI[i].id === id){
+      pan.className = 'pannello attivo';
+      btn.className = 'attivo';
+    } else {
+      pan.className = 'pannello';
+      btn.className = '';
+    }
+  }
+}
+
+/* ============================================================
+   1. BURROBIRRA-PONG
+   ============================================================ */
+
+function initBurrobirra(pannello){
+  pannello.innerHTML =
+    '<h2>Burrobirra-Pong</h2>' +
+    '<p class="intro">Due squadre si sfidano: ad ogni round entrambe lanciano 1dDestrezza (il valore piu alto vince il round). Chi vince almeno 2 round su 3 si aggiudica la partita.</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Squadra A — nome <input type="text" id="bb-nomeA" value="Squadra A"></label>' +
+        '<label>Destrezza <input type="number" id="bb-destA" value="10" min="1"></label>' +
+      '</div>' +
+      '<div class="riga">' +
+        '<label>Squadra B — nome <input type="text" id="bb-nomeB" value="Squadra B"></label>' +
+        '<label>Destrezza <input type="number" id="bb-destB" value="10" min="1"></label>' +
+      '</div>' +
+      '<button class="btn" id="bb-gioca">Gioca la partita (3 round)</button>' +
+    '</div>' +
+    '<div class="log" id="bb-log"></div>' +
+    '<p class="nota">Ogni centro subito costringe un giocatore della squadra colpita a bere un calice: -1 Resistenza per i post successivi a quelli in cui si beve, pari al numero di calici ingeriti (calcolo da applicare manualmente in role).</p>';
+
+  var log = pannello.querySelector('#bb-log');
+  var bottone = pannello.querySelector('#bb-gioca');
+
+  aggancia(bottone, function(){
+    var nomeA = pannello.querySelector('#bb-nomeA').value || 'Squadra A';
+    var nomeB = pannello.querySelector('#bb-nomeB').value || 'Squadra B';
+    var destA = parseInt(pannello.querySelector('#bb-destA').value, 10) || 1;
+    var destB = parseInt(pannello.querySelector('#bb-destB').value, 10) || 1;
+
+    var vittorieA = 0;
+    var vittorieB = 0;
+    var righeRound = '';
+
+    for(var r=1; r<=3; r++){
+      var tiroA = tira(destA);
+      var tiroB = tira(destB);
+      var vincitoreRound = '';
+      if(tiroA > tiroB){
+        vittorieA++;
+        vincitoreRound = nomeA;
+      } else {
+        if(tiroB > tiroA){
+          vittorieB++;
+          vincitoreRound = nomeB;
+        } else {
+          vincitoreRound = 'pareggio (nessun centro)';
+        }
+      }
+      righeRound = righeRound + '<br>Round ' + r + ': ' + nomeA + ' ' + testoDado(tiroA) + ' vs ' + nomeB + ' ' + testoDado(tiroB) + ' — vince <b>' + vincitoreRound + '</b>';
+    }
+
+    var esitoFinale = '';
+    if(vittorieA > vittorieB){
+      esitoFinale = '<span class="vincitore">' + nomeA + ' vince la partita (' + vittorieA + '-' + vittorieB + ')</span>';
+    } else {
+      if(vittorieB > vittorieA){
+        esitoFinale = '<span class="vincitore">' + nomeB + ' vince la partita (' + vittorieB + '-' + vittorieA + ')</span>';
+      } else {
+        esitoFinale = '<span class="esito">Partita in perfetta parita, si consiglia uno spareggio</span>';
+      }
+    }
+
+    aggiungiLog(log, '<b>' + nomeA + '</b> vs <b>' + nomeB + '</b>' + righeRound + '<br>' + esitoFinale);
+  });
+}
+
+/* ============================================================
+   2. CORSE DEI CAVALLI ALATI
+   ============================================================ */
+
+function initCavalli(pannello){
+  pannello.innerHTML =
+    '<h2>Corse dei Cavalli Alati</h2>' +
+    '<p class="intro">7 Cavalli Alati (numerati 1-7). La gara dura 5 giri: ogni PG iscritto lancia 1d7 ad ogni giro, assegnando un punto al Cavallo con quel numero. Al termine vince il Cavallo con piu punti; chi ha scommesso su di lui vince la posta.</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Nome PG <input type="text" id="cv-nome"></label>' +
+        '<label>Scommette sul Cavallo <select id="cv-cavallo"></select></label>' +
+        '<label>Puntata (Galeoni) <input type="number" id="cv-puntata" value="0" min="0"></label>' +
+        '<button class="btn secondario piccolo" id="cv-aggiungi">Aggiungi giocatore</button>' +
+      '</div>' +
+    '</div>' +
+    '<ul class="giocatori" id="cv-lista"></ul>' +
+    '<div class="riga">' +
+      '<label>Nomi dei Cavalli (facoltativo, separati da virgola, in ordine 1-7) <input type="text" id="cv-nomi-cavalli" style="width:340px"></label>' +
+    '</div>' +
+    '<button class="btn" id="cv-avvia">Avvia la gara (5 giri)</button>' +
+    '<div class="log" id="cv-log"></div>';
+
+  var selCavallo = pannello.querySelector('#cv-cavallo');
+  for(var n=1;n<=7;n++){
+    var opt = creaEl('option', null, 'Cavallo ' + n);
+    opt.value = n;
+    selCavallo.appendChild(opt);
+  }
+
+  var lista = pannello.querySelector('#cv-lista');
+  var gestore = creaGestoreGiocatori(lista, [
+    { chiave:'cavallo', etichetta:'Cavallo' },
+    { chiave:'puntata', etichetta:'Puntata' }
+  ]);
+
+  aggancia(pannello.querySelector('#cv-aggiungi'), function(){
+    var nome = pannello.querySelector('#cv-nome').value.trim();
+    if(!nome){ nome = 'Giocatore ' + (gestore.lista().length + 1); }
+    var cavallo = parseInt(selCavallo.value, 10);
+    var puntata = parseInt(pannello.querySelector('#cv-puntata').value, 10) || 0;
+    gestore.aggiungi({ nome:nome, cavallo:cavallo, puntata:puntata });
+    pannello.querySelector('#cv-nome').value = '';
+  });
+
+  var log = pannello.querySelector('#cv-log');
+
+  aggancia(pannello.querySelector('#cv-avvia'), function(){
+    var giocatori = gestore.lista();
+    if(giocatori.length === 0){
+      aggiungiLog(log, '<span class="avviso">Aggiungi almeno un giocatore prima di avviare la gara.</span>');
+      return;
+    }
+    var nomiInput = pannello.querySelector('#cv-nomi-cavalli').value.trim();
+    var nomiCavalli = [];
+    if(nomiInput){
+      nomiCavalli = nomiInput.split(',');
+    }
+    function nomeCavallo(numero){
+      var idx = numero - 1;
+      if(nomiCavalli[idx]){ return nomiCavalli[idx].trim() + ' (Cavallo ' + numero + ')'; }
+      return 'Cavallo ' + numero;
+    }
+
+    var punti = [0,0,0,0,0,0,0,0];
+    var dettaglioGiri = '';
+    for(var giro=1; giro<=5; giro++){
+      var tiriGiro = [];
+      for(var g=0; g<giocatori.length; g++){
+        var esito = tira(7);
+        punti[esito]++;
+        tiriGiro.push(giocatori[g].nome + '→' + testoDado(esito));
+      }
+      dettaglioGiri = dettaglioGiri + '<br>Giro ' + giro + ': ' + tiriGiro.join(' | ');
+    }
+
+    var puntiMax = -1;
+    for(var c=1;c<=7;c++){
+      if(punti[c] > puntiMax){ puntiMax = punti[c]; }
+    }
+    var vincitori = [];
+    for(var c2=1;c2<=7;c2++){
+      if(punti[c2] === puntiMax){ vincitori.push(c2); }
+    }
+
+    var righeClassifica = '';
+    for(var c3=1;c3<=7;c3++){
+      righeClassifica = righeClassifica + '<br>' + nomeCavallo(c3) + ': ' + punti[c3] + ' punti';
+    }
+
+    var righeVincite = '';
+    for(var v=0; v<vincitori.length; v++){
+      var numVinc = vincitori[v];
+      for(var gg=0; gg<giocatori.length; gg++){
+        if(giocatori[gg].cavallo === numVinc){
+          righeVincite = righeVincite + '<br><span class="vincitore">' + giocatori[gg].nome + ' vince ' + giocatori[gg].puntata + ' Galeoni</span> (scommessa su ' + nomeCavallo(numVinc) + ')';
+        }
+      }
+    }
+    if(!righeVincite){ righeVincite = '<br>Nessuno dei presenti aveva scommesso sul Cavallo vincitore.'; }
+
+    var testoVincitori = '';
+    for(var vv=0; vv<vincitori.length; vv++){
+      if(vv>0){ testoVincitori = testoVincitori + ', '; }
+      testoVincitori = testoVincitori + nomeCavallo(vincitori[vv]);
+    }
+
+    aggiungiLog(log, '<b>Esito gara</b>' + dettaglioGiri + '<br><br><b>Classifica finale</b>' + righeClassifica + '<br><br><b>Vince: ' + testoVincitori + '</b>' + righeVincite);
+  });
+}
+
+/* ============================================================
+   3. DARDI MAGICI
+   ============================================================ */
+
+function initDardi(pannello){
+  pannello.innerHTML =
+    '<h2>Dardi Magici</h2>' +
+    '<p class="intro">Ogni Dardo richiede due tiri: uno per l\'anello (in base alla Destrezza) e uno per lo spicchio (1d20). Ogni PG ha 5 Dardi a disposizione; se un Dardo centra il centro pieno la partita finisce subito (501 punti).</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Nome PG <input type="text" id="dg-nome"></label>' +
+        '<label>Destrezza <input type="number" id="dg-destrezza" value="10" min="1"></label>' +
+        '<button class="btn secondario piccolo" id="dg-aggiungi">Aggiungi giocatore</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="dg-giocatori"></div>' +
+    '<div class="log" id="dg-log"></div>';
+
+  var contenitoreGiocatori = pannello.querySelector('#dg-giocatori');
+  var log = pannello.querySelector('#dg-log');
+  var giocatori = [];
+
+  function dadoAnello(destrezza){
+    if(destrezza <= 5){ return 50; }
+    if(destrezza <= 10){ return 45; }
+    if(destrezza <= 15){ return 40; }
+    if(destrezza <= 20){ return 35; }
+    return 30;
+  }
+
+  function interpretaAnello(risultato){
+    if(risultato === 1){ return { nome:'Centro pieno', molt:0, fine:true }; }
+    if(risultato <= 6){ return { nome:'Centro', molt:4, fine:false }; }
+    if(risultato <= 14){ return { nome:'Anello del doppio', molt:3, fine:false }; }
+    if(risultato <= 29){ return { nome:'Anello del triplo', molt:2, fine:false }; }
+    return { nome:'Vuoto', molt:1, fine:false };
+  }
+
+  function disegnaGiocatori(){
+    svuota(contenitoreGiocatori);
+    for(var i=0;i<giocatori.length;i++){
+      (function(idx){
+        var pg = giocatori[idx];
+        var box = creaEl('div', 'riquadro');
+
+        var titolo = creaEl('div');
+        titolo.innerHTML = '<b>' + pg.nome + '</b> — Destrezza ' + pg.destrezza + ' (usa 1d' + dadoAnello(pg.destrezza) + ' per l\'anello) — Punteggio totale: <span class="esito">' + pg.punteggio + '</span> — Dardi lanciati: ' + pg.dardiLanciati + '/5' + (pg.finito ? ' <span class="successo">(PARTITA CONCLUSA - 501!)</span>' : '');
+        box.appendChild(titolo);
+
+        var bLancia = creaEl('button', 'btn piccolo', 'Lancia un Dardo');
+        if(pg.dardiLanciati >= 5 || pg.finito){
+          bLancia.disabled = true;
+        }
+        aggancia(bLancia, function(){
+          var facceAnello = dadoAnello(pg.destrezza);
+          var tiroAnello = tira(facceAnello);
+          var info = interpretaAnello(tiroAnello);
+          pg.dardiLanciati++;
+
+          var riga = '<b>' + pg.nome + '</b> — Dardo ' + pg.dardiLanciati + ': 1d' + facceAnello + ' = ' + testoDado(tiroAnello) + ' → ' + info.nome;
+
+          if(info.fine){
+            pg.punteggio = 501;
+            pg.finito = true;
+            riga = riga + ' <span class="successo">CENTRO PIENO! 501 punti, partita conclusa.</span>';
+          } else {
+            var tiroSpicchio = tira(20);
+            var puntiOttenuti = tiroSpicchio * info.molt;
+            pg.punteggio = pg.punteggio + puntiOttenuti;
+            riga = riga + ' — spicchio 1d20 = ' + testoDado(tiroSpicchio) + ' → ' + puntiOttenuti + ' punti (spicchio x' + info.molt + ')';
+          }
+
+          aggiungiLog(log, riga);
+          disegnaGiocatori();
+        });
+        box.appendChild(bLancia);
+
+        var bRimuovi = creaEl('button', 'btn rimuovi piccolo', 'Rimuovi giocatore');
+        aggancia(bRimuovi, function(){
+          giocatori.splice(idx,1);
+          disegnaGiocatori();
+        });
+        box.appendChild(bRimuovi);
+
+        contenitoreGiocatori.appendChild(box);
+      })(i);
+    }
+
+    if(giocatori.length > 1){
+      var bConfronta = creaEl('button', 'btn', 'Confronta punteggi e decreta il vincitore');
+      aggancia(bConfronta, function(){
+        var migliore = giocatori[0];
+        for(var i2=1;i2<giocatori.length;i2++){
+          if(giocatori[i2].punteggio > migliore.punteggio){ migliore = giocatori[i2]; }
+        }
+        aggiungiLog(log, '<span class="vincitore">Vince ' + migliore.nome + ' con ' + migliore.punteggio + ' punti!</span>');
+      });
+      contenitoreGiocatori.appendChild(bConfronta);
+    }
+  }
+
+  aggancia(pannello.querySelector('#dg-aggiungi'), function(){
+    var nome = pannello.querySelector('#dg-nome').value.trim();
+    if(!nome){ nome = 'Giocatore ' + (giocatori.length + 1); }
+    var destrezza = parseInt(pannello.querySelector('#dg-destrezza').value, 10) || 1;
+    giocatori.push({ nome:nome, destrezza:destrezza, punteggio:0, dardiLanciati:0, finito:false });
+    pannello.querySelector('#dg-nome').value = '';
+    disegnaGiocatori();
+  });
+}
+
+/* ============================================================
+   4. GOBBIGLIE
+   ============================================================ */
+
+function initGobbiglie(pannello){
+  pannello.innerHTML =
+    '<h2>Gobbiglie</h2>' +
+    '<p class="intro">Al primo turno ogni PG lancia 7d9 per piazzare le proprie 7 Gobbiglie sugli anelli. Nei turni successivi si lancia (1-7)d9 per spostare le proprie Gobbiglie, oppure NdegreeSpostate d9 per colpire quelle avversarie (con rischio NdegreeSpostate d3 di retrocedere le proprie). Il punteggio va tenuto manualmente secondo la tabella qui sotto.</p>' +
+    '<div class="riquadro">' +
+      '<b>Tabella punti (avanzamento)</b>' +
+      '<table><tr><th>Movimento</th><th>Punti</th></tr>' +
+      '<tr><td>4° anello → 3°</td><td>+1</td></tr>' +
+      '<tr><td>4° anello → 2°</td><td>+3</td></tr>' +
+      '<tr><td>4° anello → 1°</td><td>+7</td></tr>' +
+      '<tr><td>3° anello → 2°</td><td>+2</td></tr>' +
+      '<tr><td>3° anello → 1°</td><td>+3</td></tr>' +
+      '<tr><td>2° anello → 1°</td><td>+1</td></tr>' +
+      '</table>' +
+      '<p class="nota">Il ritorno (retrocessione) vale lo stesso importo in negativo. Fuori dagli anelli: nessuna variazione di punti, ma la Gobbiglia esce dalla partita.</p>' +
+    '</div>' +
+
+    '<div class="riquadro">' +
+      '<h3 style="margin-top:0;color:var(--oro-chiaro)">Primo turno — piazzamento (7d9)</h3>' +
+      '<label>Nome PG <input type="text" id="gb-nome1"></label>' +
+      '<button class="btn" id="gb-piazza">Lancia 7d9 per il piazzamento</button>' +
+      '<div id="gb-esito-piazza"></div>' +
+    '</div>' +
+
+    '<div class="riquadro">' +
+      '<h3 style="margin-top:0;color:var(--oro-chiaro)">Turni successivi — spostare le proprie Gobbiglie</h3>' +
+      '<label>Nome PG <input type="text" id="gb-nome2"></label>' +
+      '<label>Quante Gobbiglie sposta (1-7) <input type="number" id="gb-numero2" value="1" min="1" max="7"></label>' +
+      '<button class="btn" id="gb-sposta">Lancia (N)d9</button>' +
+      '<div id="gb-esito-sposta"></div>' +
+    '</div>' +
+
+    '<div class="riquadro">' +
+      '<h3 style="margin-top:0;color:var(--oro-chiaro)">Colpire le Gobbiglie avversarie</h3>' +
+      '<label>Nome PG che attacca <input type="text" id="gb-nome3"></label>' +
+      '<label>Quante Gobbiglie avversarie colpisce <input type="number" id="gb-numero3" value="1" min="1" max="7"></label>' +
+      '<button class="btn" id="gb-colpisci">Lancia Nd9 (avversario) + Nd3 (rischio proprio)</button>' +
+      '<div id="gb-esito-colpisci"></div>' +
+    '</div>' +
+
+    '<div class="log" id="gb-log"></div>';
+
+  var log = pannello.querySelector('#gb-log');
+
+  function posizioneAnello(v){
+    if(v <= 2){ return '1° anello'; }
+    if(v <= 4){ return '2° anello'; }
+    if(v <= 6){ return '3° anello'; }
+    if(v <= 8){ return '4° anello'; }
+    return 'fuori dagli anelli (eliminata)';
+  }
+
+  aggancia(pannello.querySelector('#gb-piazza'), function(){
+    var nome = pannello.querySelector('#gb-nome1').value.trim() || 'PG';
+    var risultati = [];
+    var righe = '';
+    for(var i=0;i<7;i++){
+      var r = tira(9);
+      risultati.push(r);
+      righe = righe + testoDado(r) + '→' + posizioneAnello(r) + '  ';
+    }
+    var messaggio = '<b>' + nome + '</b> — Piazzamento (7d9): <br>' + righe;
+    aggiungiLog(log, messaggio);
+  });
+
+  aggancia(pannello.querySelector('#gb-sposta'), function(){
+    var nome = pannello.querySelector('#gb-nome2').value.trim() || 'PG';
+    var n = parseInt(pannello.querySelector('#gb-numero2').value, 10) || 1;
+    var righe = '';
+    for(var i=0;i<n;i++){
+      var r = tira(9);
+      righe = righe + testoDado(r) + '→' + posizioneAnello(r) + '  ';
+    }
+    aggiungiLog(log, '<b>' + nome + '</b> — Sposta ' + n + ' Gobbigli' + (n===1?'a':'e') + ' (' + n + 'd9): <br>' + righe);
+  });
+
+  aggancia(pannello.querySelector('#gb-colpisci'), function(){
+    var nome = pannello.querySelector('#gb-nome3').value.trim() || 'PG';
+    var n = parseInt(pannello.querySelector('#gb-numero3').value, 10) || 1;
+    var righeAvversario = '';
+    for(var i=0;i<n;i++){
+      var r = tira(9);
+      righeAvversario = righeAvversario + testoDado(r) + '→' + posizioneAnello(r) + '  ';
+    }
+    var righeRischio = '';
+    var retrocessioni = 0;
+    for(var j=0;j<n;j++){
+      var r3 = tira(3);
+      righeRischio = righeRischio + testoDado(r3) + '  ';
+      if(r3 === 3){ retrocessioni++; }
+    }
+    var messaggioRischio = retrocessioni + ' Gobbigli' + (retrocessioni===1?'a':'e') + ' propri' + (retrocessioni===1?'a':'e') + ' retrocede di un anello (se al 4° anello, esce dalla partita).';
+    aggiungiLog(log, '<b>' + nome + '</b> attacca ' + n + ' Gobbigli' + (n===1?'a':'e') + ' avversari' + (n===1?'a':'e') + ': <br>Esito avversario (' + n + 'd9): ' + righeAvversario + '<br>Rischio proprio (' + n + 'd3): ' + righeRischio + ' → ' + messaggioRischio);
+  });
+}
+
+/* ============================================================
+   5. JACKBLACK
+   ============================================================ */
+
+function initJackblack(pannello){
+  pannello.innerHTML =
+    '<h2>Jackblack</h2>' +
+    '<p class="intro">Ogni giocatore e il Banco ricevono due carte. A turno ogni giocatore puo chiedere carta o stare, senza superare 21. Vince chi si avvicina di piu a 21 senza sforare.</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Nome giocatore <input type="text" id="jb-nome"></label>' +
+        '<button class="btn secondario piccolo" id="jb-aggiungi">Aggiungi giocatore</button>' +
+        '<button class="btn secondario piccolo" id="jb-nuova-mano">Nuova mano (rimescola tutto)</button>' +
+      '</div>' +
+    '</div>' +
+    '<ul class="giocatori" id="jb-lista-attesa"></ul>' +
+    '<div id="jb-tavolo"></div>' +
+    '<div class="log" id="jb-log"></div>';
+
+  var log = pannello.querySelector('#jb-log');
+  var listaAttesa = pannello.querySelector('#jb-lista-attesa');
+  var tavolo = pannello.querySelector('#jb-tavolo');
+  var gestoreAttesa = creaGestoreGiocatori(listaAttesa, null);
+
+  var mazzo = [];
+  var partita = null; /* { banco:{}, giocatori:[...] } */
+
+  aggancia(pannello.querySelector('#jb-aggiungi'), function(){
+    var nome = pannello.querySelector('#jb-nome').value.trim();
+    if(!nome){ return; }
+    gestoreAttesa.aggiungi({ nome:nome });
+    pannello.querySelector('#jb-nome').value = '';
+  });
+
+  function calcolaTotale(carte){
+    var somma = 0;
+    for(var i=0;i<carte.length;i++){ somma = somma + valoreJackblack(carte[i]); }
+    return somma;
+  }
+
+  function renderTavolo(){
+    svuota(tavolo);
+    if(!partita){ return; }
+
+    var boxBanco = creaEl('div', 'riquadro');
+    boxBanco.innerHTML = '<b>Banco</b> — Totale: <span class="esito">' + calcolaTotale(partita.banco.carte) + '</span>';
+    var manoBanco = creaEl('div', 'mano');
+    for(var b=0;b<partita.banco.carte.length;b++){
+      manoBanco.appendChild(creaEl('span', 'carta', partita.banco.carte[b].nome));
+    }
+    boxBanco.appendChild(manoBanco);
+    tavolo.appendChild(boxBanco);
+
+    for(var i=0;i<partita.giocatori.length;i++){
+      (function(idx){
+        var pg = partita.giocatori[idx];
+        var box = creaEl('div', 'riquadro');
+        var totale = calcolaTotale(pg.carte);
+        var stato = pg.sforato ? '<span class="avviso">sforato</span>' : (pg.fermo ? '<span class="esito">sta</span>' : 'in gioco');
+        box.innerHTML = '<b>' + pg.nome + '</b> — Totale: <span class="esito">' + totale + '</span> — ' + stato;
+
+        var mano = creaEl('div', 'mano');
+        for(var c=0;c<pg.carte.length;c++){
+          mano.appendChild(creaEl('span', 'carta', pg.carte[c].nome));
+        }
+        box.appendChild(mano);
+
+        if(!pg.fermo){
+          var bCarta = creaEl('button', 'btn piccolo', 'Chiedi carta');
+          aggancia(bCarta, function(){
+            if(mazzo.length === 0){ aggiungiLog(log, '<span class="avviso">Il mazzo e esaurito.</span>'); return; }
+            var carta = mazzo.pop();
+            pg.carte.push(carta);
+            var nuovoTotale = calcolaTotale(pg.carte);
+            aggiungiLog(log, pg.nome + ' pesca ' + carta.nome + ' — totale: ' + nuovoTotale);
+            if(nuovoTotale > 21){
+              pg.sforato = true;
+              pg.fermo = true;
+              aggiungiLog(log, '<span class="avviso">' + pg.nome + ' sfora 21!</span>');
+            }
+            renderTavolo();
+          });
+          box.appendChild(bCarta);
+
+          var bSta = creaEl('button', 'btn secondario piccolo', 'Sta');
+          aggancia(bSta, function(){
+            pg.fermo = true;
+            aggiungiLog(log, pg.nome + ' sta con ' + calcolaTotale(pg.carte) + '.');
+            renderTavolo();
+          });
+          box.appendChild(bSta);
+        }
+
+        tavolo.appendChild(box);
+      })(i);
+    }
+
+    var bTermina = creaEl('button', 'btn', 'Determina il vincitore');
+    aggancia(bTermina, function(){
+      var migliore = null;
+      var migliorTotale = -1;
+      var partecipanti = partita.giocatori.slice();
+      partecipanti.push({ nome:'Banco', carte:partita.banco.carte, sforato:calcolaTotale(partita.banco.carte) > 21 });
+      for(var p=0;p<partecipanti.length;p++){
+        var tot = calcolaTotale(partecipanti[p].carte);
+        if(tot <= 21){
+          if(tot > migliorTotale){
+            migliorTotale = tot;
+            migliore = partecipanti[p];
+          }
+        }
+      }
+      if(migliore){
+        aggiungiLog(log, '<span class="vincitore">Vince ' + migliore.nome + ' con ' + migliorTotale + ' punti!</span>');
+      } else {
+        aggiungiLog(log, '<span class="avviso">Tutti hanno sforato 21: nessun vincitore.</span>');
+      }
+    });
+    tavolo.appendChild(bTermina);
+  }
+
+  aggancia(pannello.querySelector('#jb-nuova-mano'), function(){
+    var giocatori = gestoreAttesa.lista();
+    if(giocatori.length === 0){
+      aggiungiLog(log, '<span class="avviso">Aggiungi almeno un giocatore prima di iniziare.</span>');
+      return;
+    }
+    mazzo = mescolaMazzo(nuovoMazzo52());
+    var partitaGiocatori = [];
+    for(var i=0;i<giocatori.length;i++){
+      partitaGiocatori.push({ nome:giocatori[i].nome, carte:[mazzo.pop(), mazzo.pop()], fermo:false, sforato:false });
+    }
+    partita = { banco:{ carte:[mazzo.pop(), mazzo.pop()] }, giocatori:partitaGiocatori };
+    aggiungiLog(log, '<b>Nuova mano distribuita.</b>');
+    renderTavolo();
+  });
+}
+
+/* ============================================================
+   6. KNOCKER
+   ============================================================ */
+
+function initKnocker(pannello){
+  pannello.innerHTML =
+    '<h2>Knocker</h2>' +
+    '<p class="intro">Ogni giocatore riceve 5 carte coperte. Dopo il primo giro di puntate puo scartare fino a 3 carte per pescarne di nuove, poi si mostrano le mani. Il valutatore qui sotto riconosce automaticamente la combinazione di ciascuna mano.</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Nome giocatore <input type="text" id="kn-nome"></label>' +
+        '<button class="btn secondario piccolo" id="kn-aggiungi">Aggiungi giocatore</button>' +
+        '<button class="btn secondario piccolo" id="kn-distribuisci">Distribuisci le mani (5 carte a testa)</button>' +
+      '</div>' +
+    '</div>' +
+    '<ul class="giocatori" id="kn-lista-attesa"></ul>' +
+    '<div id="kn-tavolo"></div>' +
+    '<div class="log" id="kn-log"></div>';
+
+  var log = pannello.querySelector('#kn-log');
+  var listaAttesa = pannello.querySelector('#kn-lista-attesa');
+  var tavolo = pannello.querySelector('#kn-tavolo');
+  var gestoreAttesa = creaGestoreGiocatori(listaAttesa, null);
+  var mazzo = [];
+  var mani = [];
+
+  aggancia(pannello.querySelector('#kn-aggiungi'), function(){
+    var nome = pannello.querySelector('#kn-nome').value.trim();
+    if(!nome){ return; }
+    gestoreAttesa.aggiungi({ nome:nome });
+    pannello.querySelector('#kn-nome').value = '';
+  });
+
+  function valutaMano(carte){
+    var valori = [];
+    var semi = [];
+    for(var i=0;i<carte.length;i++){
+      valori.push(carte[i].valore);
+      semi.push(carte[i].seme);
+    }
+    var conteggio = {};
+    for(var v=0;v<valori.length;v++){
+      var chiave = valori[v];
+      conteggio[chiave] = (conteggio[chiave] || 0) + 1;
+    }
+    var gruppi = [];
+    for(var k in conteggio){
+      if(Object.prototype.hasOwnProperty.call(conteggio,k)){
+        gruppi.push(conteggio[k]);
+      }
+    }
+    gruppi.sort(function(a,b){ return b-a; });
+
+    var stessoSeme = true;
+    for(var s=1;s<semi.length;s++){
+      if(semi[s] !== semi[0]){ stessoSeme = false; }
+    }
+
+    var ordinati = valori.slice().sort(function(a,b){ return a-b; });
+    var scala = true;
+    for(var o=1;o<ordinati.length;o++){
+      if(ordinati[o] !== ordinati[o-1] + 1){ scala = false; }
+    }
+
+    var scalaReale = false;
+    if(stessoSeme){
+      var attesi = [9,10,11,12,13];
+      scalaReale = true;
+      for(var e=0;e<5;e++){
+        if(ordinati[e] !== attesi[e]){ scalaReale = false; }
+      }
+    }
+
+    if(scalaReale){ return 'Scala Reale'; }
+    if(scala){
+      if(stessoSeme){ return 'Scala Colore'; }
+    }
+    if(gruppi[0] === 4){ return 'Knocker (Poker)'; }
+    if(gruppi[0] === 3){ return 'Tris'; }
+    if(scala){ return 'Scala'; }
+    if(gruppi[0] === 2){
+      if(gruppi[1] === 2){ return 'Doppia Coppia'; }
+      return 'Coppia';
+    }
+    return 'Carta Alta';
+  }
+
+  function renderTavolo(){
+    svuota(tavolo);
+    for(var i=0;i<mani.length;i++){
+      (function(idx){
+        var m = mani[idx];
+        var box = creaEl('div', 'riquadro');
+        box.innerHTML = '<b>' + m.nome + '</b>';
+        var manoDiv = creaEl('div', 'mano');
+        for(var c=0;c<m.carte.length;c++){
+          manoDiv.appendChild(creaEl('span', 'carta', m.carte[c].nome));
+        }
+        box.appendChild(manoDiv);
+
+        var risultato = creaEl('div', 'esito', 'Combinazione: ' + valutaMano(m.carte));
+        box.appendChild(risultato);
+
+        tavolo.appendChild(box);
+      })(i);
+    }
+
+    if(mani.length > 0){
+      var bMostra = creaEl('button', 'btn', 'Mostra il vincitore (Showdown)');
+      var ORDINE = ['Carta Alta','Coppia','Doppia Coppia','Tris','Scala','Knocker (Poker)','Scala Colore','Scala Reale'];
+      aggancia(bMostra, function(){
+        var migliore = mani[0];
+        var migliorRango = ORDINE.indexOf(valutaMano(migliore.carte));
+        for(var j=1;j<mani.length;j++){
+          var rango = ORDINE.indexOf(valutaMano(mani[j].carte));
+          if(rango > migliorRango){
+            migliorRango = rango;
+            migliore = mani[j];
+          }
+        }
+        aggiungiLog(log, '<span class="vincitore">Vince ' + migliore.nome + ' con: ' + ORDINE[migliorRango] + '</span>');
+      });
+      tavolo.appendChild(bMostra);
+    }
+  }
+
+  aggancia(pannello.querySelector('#kn-distribuisci'), function(){
+    var giocatori = gestoreAttesa.lista();
+    if(giocatori.length === 0){
+      aggiungiLog(log, '<span class="avviso">Aggiungi almeno un giocatore prima di distribuire.</span>');
+      return;
+    }
+    mazzo = mescolaMazzo(nuovoMazzo52());
+    mani = [];
+    for(var i=0;i<giocatori.length;i++){
+      var carte = [mazzo.pop(), mazzo.pop(), mazzo.pop(), mazzo.pop(), mazzo.pop()];
+      mani.push({ nome:giocatori[i].nome, carte:carte });
+    }
+    aggiungiLog(log, '<b>Mani distribuite.</b> Ricordate di bussare sul dorso delle carte prima di puntare.');
+    renderTavolo();
+  });
+}
+
+/* ============================================================
+   7. SLOT BROOMSTICK
+   ============================================================ */
+
+var SIMBOLI_SLOT = ['Mandragola','Pozione','Bacchetta','Pergamena','Candela','Asticello','Boccino'];
+
+function initSlot(pannello){
+  pannello.innerHTML =
+    '<h2>Slot Broomstick</h2>' +
+    '<p class="intro">Il gestore lancia 3d7: 2 simboli indovinati pagano il doppio della puntata, 3 simboli indovinati pagano 5 volte la puntata.</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Nome giocatore <input type="text" id="sl-nome"></label>' +
+        '<label>Simbolo scelto <select id="sl-simbolo"></select></label>' +
+        '<label>Puntata (Galeoni) <input type="number" id="sl-puntata" value="5" min="0"></label>' +
+        '<button class="btn secondario piccolo" id="sl-aggiungi">Aggiungi giocatore</button>' +
+      '</div>' +
+    '</div>' +
+    '<ul class="giocatori" id="sl-lista"></ul>' +
+    '<button class="btn" id="sl-gira">Gira lo Slot Broomstick (3d7)</button>' +
+    '<div class="log" id="sl-log"></div>';
+
+  var selSimbolo = pannello.querySelector('#sl-simbolo');
+  for(var i=0;i<SIMBOLI_SLOT.length;i++){
+    var opt = creaEl('option', null, SIMBOLI_SLOT[i]);
+    opt.value = i;
+    selSimbolo.appendChild(opt);
+  }
+
+  var lista = pannello.querySelector('#sl-lista');
+  var gestore = creaGestoreGiocatori(lista, [
+    { chiave:'simboloTesto', etichetta:'Simbolo' },
+    { chiave:'puntata', etichetta:'Puntata' }
+  ]);
+  var log = pannello.querySelector('#sl-log');
+
+  aggancia(pannello.querySelector('#sl-aggiungi'), function(){
+    var nome = pannello.querySelector('#sl-nome').value.trim();
+    if(!nome){ return; }
+    var indice = parseInt(selSimbolo.value, 10);
+    var puntata = parseInt(pannello.querySelector('#sl-puntata').value, 10) || 0;
+    gestore.aggiungi({ nome:nome, simbolo:indice, simboloTesto:SIMBOLI_SLOT[indice], puntata:puntata });
+    pannello.querySelector('#sl-nome').value = '';
+  });
+
+  aggancia(pannello.querySelector('#sl-gira'), function(){
+    var giocatori = gestore.lista();
+    var estratti = [tira(7)-1, tira(7)-1, tira(7)-1];
+    var righeSimboli = SIMBOLI_SLOT[estratti[0]] + ', ' + SIMBOLI_SLOT[estratti[1]] + ', ' + SIMBOLI_SLOT[estratti[2]];
+
+    var righeVincite = '';
+    if(giocatori.length === 0){
+      righeVincite = '<br>(nessun giocatore registrato)';
+    }
+    for(var g=0; g<giocatori.length; g++){
+      var pg = giocatori[g];
+      var occorrenze = 0;
+      for(var e=0;e<estratti.length;e++){
+        if(estratti[e] === pg.simbolo){ occorrenze++; }
+      }
+      var vincita = 0;
+      if(occorrenze === 2){ vincita = pg.puntata * 2; }
+      if(occorrenze === 3){ vincita = pg.puntata * 5; }
+      if(vincita > 0){
+        righeVincite = righeVincite + '<br><span class="vincitore">' + pg.nome + ' vince ' + vincita + ' Galeoni</span> (' + occorrenze + ' su ' + pg.simboloTesto + ')';
+      } else {
+        righeVincite = righeVincite + '<br>' + pg.nome + ' non vince nulla.';
+      }
+    }
+
+    aggiungiLog(log, '<b>Estratti:</b> ' + righeSimboli + righeVincite);
+  });
+}
+
+/* ============================================================
+   8. SPARASCHIOCCO
+   ============================================================ */
+
+var COLORI_SPARA = [
+  { nome:'Viola', min:1, max:5, classe:'tag-viola' },
+  { nome:'Verde', min:6, max:10, classe:'tag-verde' },
+  { nome:'Blu', min:11, max:15, classe:'tag-blu' },
+  { nome:'Rosso', min:16, max:20, classe:'tag-rosso' }
+];
+
+function coloreDaNumero(n){
+  for(var i=0;i<COLORI_SPARA.length;i++){
+    if(n >= COLORI_SPARA[i].min){
+      if(n <= COLORI_SPARA[i].max){ return COLORI_SPARA[i]; }
+    }
+  }
+  return COLORI_SPARA[0];
+}
+
+function initSparaschiocco(pannello){
+  pannello.innerHTML =
+    '<h2>Sparaschiocco</h2>' +
+    '<p class="intro">Verde batte Viola, Viola batte Blu, Blu batte Rosso, Rosso batte Verde. La Dorata puo essere battuta da qualsiasi colore. Distribuisci le mani in base al numero di giocatori (i numeri ripetuti vengono rilanciati automaticamente).</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Numero di giocatori</label>' +
+        '<select id="sp-numgiocatori"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>' +
+        '<button class="btn secondario piccolo" id="sp-imposta">Imposta nomi</button>' +
+      '</div>' +
+      '<div id="sp-nomi"></div>' +
+      '<button class="btn" id="sp-distribuisci">Distribuisci le carte</button>' +
+    '</div>' +
+    '<div id="sp-mani"></div>' +
+    '<div class="riquadro">' +
+      '<h3 style="margin-top:0;color:var(--oro-chiaro)">Carta che schiocca</h3>' +
+      '<label>Numero di carte in mano dell\'avversario <input type="number" id="sp-numcarte" value="10" min="1"></label>' +
+      '<button class="btn secondario" id="sp-schiocca">Lancia 1d(N carte) per stabilire quale carta schiocca</button>' +
+      '<div id="sp-esito-schiocco"></div>' +
+    '</div>' +
+    '<div class="log" id="sp-log"></div>';
+
+  var log = pannello.querySelector('#sp-log');
+  var contenitoreNomi = pannello.querySelector('#sp-nomi');
+  var contenitoreMani = pannello.querySelector('#sp-mani');
+  var selNum = pannello.querySelector('#sp-numgiocatori');
+
+  function carteAssegnate(numGiocatori){
+    if(numGiocatori === 2){ return 10; }
+    if(numGiocatori === 3){ return 7; }
+    return 5;
+  }
+
+  function disegnaCampiNomi(){
+    svuota(contenitoreNomi);
+    var n = parseInt(selNum.value, 10);
+    for(var i=0;i<n;i++){
+      var input = creaEl('input');
+      input.type = 'text';
+      input.placeholder = 'Nome giocatore ' + (i+1);
+      input.id = 'sp-pg-' + i;
+      input.value = 'Giocatore ' + (i+1);
+      contenitoreNomi.appendChild(input);
+    }
+  }
+  disegnaCampiNomi();
+  aggancia(pannello.querySelector('#sp-imposta'), disegnaCampiNomi);
+
+  aggancia(pannello.querySelector('#sp-distribuisci'), function(){
+    var n = parseInt(selNum.value, 10);
+    var carteATesta = carteAssegnate(n);
+    var nomi = [];
+    for(var i=0;i<n;i++){
+      var campo = pannello.querySelector('#sp-pg-' + i);
+      nomi.push(campo ? (campo.value.trim() || ('Giocatore ' + (i+1))) : ('Giocatore ' + (i+1)));
+    }
+
+    svuota(contenitoreMani);
+    for(var g=0; g<n; g++){
+      var numeriUsati = [];
+      var carte = [];
+      for(var c=0; c<carteATesta; c++){
+        var numero;
+        var ripeti = true;
+        while(ripeti){
+          numero = tira(20);
+          ripeti = false;
+          for(var u=0;u<numeriUsati.length;u++){
+            if(numeriUsati[u] === numero){ ripeti = true; }
+          }
+        }
+        numeriUsati.push(numero);
+        var col = coloreDaNumero(numero);
+        carte.push({ numero:numero, colore:col });
+      }
+      carte.sort(function(a,b){ return a.numero - b.numero; });
+
+      var box = creaEl('div', 'riquadro');
+      box.innerHTML = '<b>' + nomi[g] + '</b> (' + carteATesta + ' carte)';
+      var manoDiv = creaEl('div', 'mano');
+      for(var cc=0; cc<carte.length; cc++){
+        var span = creaEl('span', 'carta ' + carte[cc].colore.classe, carte[cc].numero + ' ' + carte[cc].colore.nome);
+        manoDiv.appendChild(span);
+      }
+      box.appendChild(manoDiv);
+      contenitoreMani.appendChild(box);
+    }
+
+    aggiungiLog(log, '<b>Distribuzione completata</b> per ' + n + ' giocatori (' + carteATesta + ' carte a testa, oltre alla Dorata iniziale).');
+  });
+
+  aggancia(pannello.querySelector('#sp-schiocca'), function(){
+    var numCarte = parseInt(pannello.querySelector('#sp-numcarte').value, 10) || 1;
+    var risultato = tira(numCarte);
+    pannello.querySelector('#sp-esito-schiocco').innerHTML = 'Schiocca la carta numero ' + testoDado(risultato) + ' (contando dalla numerazione assegnata a inizio partita).';
+    aggiungiLog(log, 'Tiro per lo schiocco (1d' + numCarte + '): ' + testoDado(risultato));
+  });
+}
+
+/* ============================================================
+   9. TRIONFO
+   ============================================================ */
+
+var SEMI_TRIONFO = ['Calici','Galeoni','Bacchette','Pugnali'];
+
+function initTrionfo(pannello){
+  pannello.innerHTML =
+    '<h2>Trionfo</h2>' +
+    '<p class="intro">Il PG che distribuisce lancia 1d4 per stabilire il seme di Trionfo, poi ogni giocatore riceve 3 carte tramite 3d12. Il punteggio finale corrisponde alla somma dei numeri delle carte vinte (max 24).</p>' +
+    '<div class="riquadro">' +
+      '<button class="btn" id="tr-seme">Lancia 1d4 per il seme di Trionfo</button>' +
+      '<div id="tr-esito-seme"></div>' +
+    '</div>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Nome giocatore/coppia <input type="text" id="tr-nome"></label>' +
+        '<button class="btn secondario piccolo" id="tr-aggiungi">Aggiungi giocatore</button>' +
+      '</div>' +
+    '</div>' +
+    '<ul class="giocatori" id="tr-lista"></ul>' +
+    '<button class="btn" id="tr-distribuisci">Distribuisci 3 carte a testa (3d12)</button>' +
+    '<div id="tr-mani"></div>' +
+    '<div class="log" id="tr-log"></div>';
+
+  var log = pannello.querySelector('#tr-log');
+  var lista = pannello.querySelector('#tr-lista');
+  var gestore = creaGestoreGiocatori(lista, null);
+  var contenitoreMani = pannello.querySelector('#tr-mani');
+
+  function cartaDa12(n){
+    var indiceSeme = Math.floor((n-1) / 3);
+    var valore = ((n-1) % 3) + 1;
+    return { valore:valore, seme:SEMI_TRIONFO[indiceSeme], nome:valore + ' di ' + SEMI_TRIONFO[indiceSeme] };
+  }
+
+  aggancia(pannello.querySelector('#tr-seme'), function(){
+    var r = tira(4);
+    var seme = SEMI_TRIONFO[r-1];
+    pannello.querySelector('#tr-esito-seme').innerHTML = 'Seme di Trionfo: ' + testoDado(r) + ' → <b>' + seme + '</b>';
+    aggiungiLog(log, 'Seme di Trionfo estratto: <b>' + seme + '</b>');
+  });
+
+  aggancia(pannello.querySelector('#tr-aggiungi'), function(){
+    var nome = pannello.querySelector('#tr-nome').value.trim();
+    if(!nome){ return; }
+    gestore.aggiungi({ nome:nome });
+    pannello.querySelector('#tr-nome').value = '';
+  });
+
+  aggancia(pannello.querySelector('#tr-distribuisci'), function(){
+    var giocatori = gestore.lista();
+    if(giocatori.length === 0){
+      aggiungiLog(log, '<span class="avviso">Aggiungi almeno un giocatore prima di distribuire.</span>');
+      return;
+    }
+    svuota(contenitoreMani);
+    for(var g=0; g<giocatori.length; g++){
+      var carte = [];
+      var numeriUsati = [];
+      for(var c=0;c<3;c++){
+        var numero;
+        var ripeti = true;
+        while(ripeti){
+          numero = tira(12);
+          ripeti = false;
+          for(var u=0;u<numeriUsati.length;u++){
+            if(numeriUsati[u] === numero){ ripeti = true; }
+          }
+        }
+        numeriUsati.push(numero);
+        carte.push(cartaDa12(numero));
+      }
+      var box = creaEl('div', 'riquadro');
+      box.innerHTML = '<b>' + giocatori[g].nome + '</b>';
+      var manoDiv = creaEl('div', 'mano');
+      for(var cc=0;cc<carte.length;cc++){
+        manoDiv.appendChild(creaEl('span', 'carta', carte[cc].nome));
+      }
+      box.appendChild(manoDiv);
+      contenitoreMani.appendChild(box);
+    }
+    aggiungiLog(log, '<b>Carte distribuite</b> per il primo turno di Trionfo.');
+  });
+}
+
+/* ============================================================
+   10. SCACCHI DEI MAGHI
+   ============================================================ */
+
+function initScacchi(pannello){
+  pannello.innerHTML =
+    '<h2>Scacchi dei Maghi</h2>' +
+    '<p class="intro">Ogni giocatore lancia NdegreePezzi dAcume (N deciso a inizio partita). I risultati piu alti confrontati a coppie stabiliscono chi distrugge il pezzo dell\'altro. Dopo 3 post si puo tentare lo scacco matto con 1d10 (successo con 10).</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Giocatore A <input type="text" id="sc-nomeA" value="Giocatore A"></label>' +
+        '<label>Acume A <input type="number" id="sc-acumeA" value="10" min="1"></label>' +
+      '</div>' +
+      '<div class="riga">' +
+        '<label>Giocatore B <input type="text" id="sc-nomeB" value="Giocatore B"></label>' +
+        '<label>Acume B <input type="number" id="sc-acumeB" value="10" min="1"></label>' +
+      '</div>' +
+      '<div class="riga">' +
+        '<label>Pezzi mossi per post <input type="number" id="sc-pezzi" value="4" min="1" max="16"></label>' +
+      '</div>' +
+      '<button class="btn" id="sc-confronta">Lancia e confronta la mossa</button>' +
+    '</div>' +
+    '<div class="riquadro">' +
+      '<button class="btn secondario" id="sc-matto">Tenta lo scacco matto (dopo il 3° post, 1d10)</button>' +
+      '<div id="sc-esito-matto"></div>' +
+    '</div>' +
+    '<div class="log" id="sc-log"></div>';
+
+  var log = pannello.querySelector('#sc-log');
+
+  aggancia(pannello.querySelector('#sc-confronta'), function(){
+    var nomeA = pannello.querySelector('#sc-nomeA').value || 'Giocatore A';
+    var nomeB = pannello.querySelector('#sc-nomeB').value || 'Giocatore B';
+    var acumeA = parseInt(pannello.querySelector('#sc-acumeA').value, 10) || 1;
+    var acumeB = parseInt(pannello.querySelector('#sc-acumeB').value, 10) || 1;
+    var pezzi = parseInt(pannello.querySelector('#sc-pezzi').value, 10) || 1;
+
+    var tiriA = [];
+    var tiriB = [];
+    for(var i=0;i<pezzi;i++){
+      tiriA.push(tira(acumeA));
+      tiriB.push(tira(acumeB));
+    }
+
+    var puntiA = 0;
+    var puntiB = 0;
+    var righe = '';
+    for(var j=0;j<pezzi;j++){
+      var esito = '';
+      if(tiriA[j] > tiriB[j]){
+        puntiA++;
+        esito = nomeA + ' distrugge un pezzo';
+      } else {
+        if(tiriB[j] > tiriA[j]){
+          puntiB++;
+          esito = nomeB + ' distrugge un pezzo';
+        } else {
+          if(acumeA > acumeB){
+            puntiA++;
+            esito = 'parita nel tiro, vince ' + nomeA + ' per Acume superiore';
+          } else {
+            if(acumeB > acumeA){
+              puntiB++;
+              esito = 'parita nel tiro, vince ' + nomeB + ' per Acume superiore';
+            } else {
+              esito = 'parita totale, nessuno distrugge il pezzo';
+            }
+          }
+        }
+      }
+      righe = righe + '<br>Pezzo ' + (j+1) + ': ' + nomeA + ' ' + testoDado(tiriA[j]) + ' vs ' + nomeB + ' ' + testoDado(tiriB[j]) + ' → ' + esito;
+    }
+
+    aggiungiLog(log, '<b>Scontro dei pezzi</b>' + righe + '<br><br>Totale: ' + nomeA + ' distrugge ' + puntiA + ' pezzi, ' + nomeB + ' distrugge ' + puntiB + ' pezzi.');
+  });
+
+  aggancia(pannello.querySelector('#sc-matto'), function(){
+    var r = tira(10);
+    var esito = pannello.querySelector('#sc-esito-matto');
+    if(r === 10){
+      esito.innerHTML = testoDado(r) + ' — <span class="successo">SCACCO MATTO!</span>';
+      aggiungiLog(log, 'Tentativo di scacco matto: ' + testoDado(r) + ' — <span class="successo">riuscito!</span>');
+    } else {
+      esito.innerHTML = testoDado(r) + ' — nessuno scacco matto, la partita continua.';
+      aggiungiLog(log, 'Tentativo di scacco matto: ' + testoDado(r) + ' — fallito.');
+    }
+  });
+}
+
+/* ============================================================
+   11. RUNETTE
+   ============================================================ */
+
+var RUNE = [
+  'Fehu (F)','Uruz (U)','Thurisaz (Th)','Ansuz (A)','Raidho (R)','Kenaz (K)',
+  'Gebo (G)','Wunjo (W)','Hagalaz (H)','Nauthiz (N)','Isa (I)','Jera (J)',
+  'Eihwaz (Ei)','Perthro (P)','Algiz (Z)','Sowilo (S)','Tiwaz (T)','Berkano (B)',
+  'Ehwaz (E)','Mannaz (M)','Laguz (L)','Inguz (Ng)','Dagaz (D)','Othala (O)'
+];
+
+function initRunette(pannello){
+  pannello.innerHTML =
+    '<h2>Runette</h2>' +
+    '<p class="intro">La ruota si ferma su un colore (Viola o Verde, 1d2) e su una delle 24 rune (1d24). Indovinare la runa paga 24 volte la puntata, indovinare il colore paga 2 volte la puntata.</p>' +
+    '<div class="riquadro">' +
+      '<div class="riga">' +
+        '<label>Nome giocatore <input type="text" id="rn-nome"></label>' +
+      '</div>' +
+      '<div class="riga">' +
+        '<label><input type="checkbox" id="rn-puntacolore"> Punta sul colore</label>' +
+        '<select id="rn-colore"><option value="1">Viola</option><option value="2">Verde</option></select>' +
+        '<label>Puntata colore <input type="number" id="rn-puntatacolore" value="0" min="0"></label>' +
+      '</div>' +
+      '<div class="riga">' +
+        '<label><input type="checkbox" id="rn-puntaruna"> Punta sulla runa</label>' +
+        '<select id="rn-runa"></select>' +
+        '<label>Puntata runa <input type="number" id="rn-puntataruna" value="0" min="0"></label>' +
+      '</div>' +
+      '<button class="btn secondario piccolo" id="rn-aggiungi">Aggiungi puntata</button>' +
+    '</div>' +
+    '<ul class="giocatori" id="rn-lista"></ul>' +
+    '<button class="btn" id="rn-gira">Fai girare la Runette</button>' +
+    '<div class="log" id="rn-log"></div>';
+
+  var selRuna = pannello.querySelector('#rn-runa');
+  for(var i=0;i<RUNE.length;i++){
+    var opt = creaEl('option', null, RUNE[i]);
+    opt.value = i+1;
+    selRuna.appendChild(opt);
+  }
+
+  var lista = pannello.querySelector('#rn-lista');
+  var log = pannello.querySelector('#rn-log');
+  var puntate = [];
+
+  function render(){
+    svuota(lista);
+    for(var i=0;i<puntate.length;i++){
+      (function(idx){
+        var p = puntate[idx];
+        var descr = p.nome + ' — ';
+        var parti = [];
+        if(p.colore){ parti.push('Colore ' + (p.colore===1?'Viola':'Verde') + ' (' + p.puntataColore + ' Gal.)'); }
+        if(p.runa){ parti.push('Runa ' + RUNE[p.runa-1] + ' (' + p.puntataRuna + ' Gal.)'); }
+        descr = descr + parti.join(', ');
+        var li = creaEl('li');
+        var span = creaEl('span', null, descr);
+        var bRimuovi = creaEl('button', 'btn rimuovi piccolo', 'Rimuovi');
+        aggancia(bRimuovi, function(){ puntate.splice(idx,1); render(); });
+        li.appendChild(span);
+        li.appendChild(bRimuovi);
+        lista.appendChild(li);
+      })(i);
+    }
+  }
+
+  aggancia(pannello.querySelector('#rn-aggiungi'), function(){
+    var nome = pannello.querySelector('#rn-nome').value.trim();
+    if(!nome){ return; }
+    var punteColore = pannello.querySelector('#rn-puntacolore').checked;
+    var punteRuna = pannello.querySelector('#rn-puntaruna').checked;
+    var colore = punteColore ? parseInt(pannello.querySelector('#rn-colore').value, 10) : 0;
+    var puntataColore = punteColore ? (parseInt(pannello.querySelector('#rn-puntatacolore').value, 10) || 0) : 0;
+    var runa = punteRuna ? parseInt(selRuna.value, 10) : 0;
+    var puntataRuna = punteRuna ? (parseInt(pannello.querySelector('#rn-puntataruna').value, 10) || 0) : 0;
+
+    puntate.push({ nome:nome, colore:colore, puntataColore:puntataColore, runa:runa, puntataRuna:puntataRuna });
+    pannello.querySelector('#rn-nome').value = '';
+    render();
+  });
+
+  aggancia(pannello.querySelector('#rn-gira'), function(){
+    var colEstratto = tira(2);
+    var runaEstratta = tira(24);
+    var nomeColore = colEstratto === 1 ? 'Viola' : 'Verde';
+
+    var righe = '<b>Estrazione:</b> Colore ' + testoDado(colEstratto) + ' → ' + nomeColore + '   |   Runa ' + testoDado(runaEstratta) + ' → ' + RUNE[runaEstratta-1];
+
+    if(puntate.length === 0){
+      righe = righe + '<br>(nessuna puntata registrata)';
+    }
+    for(var i=0;i<puntate.length;i++){
+      var p = puntate[i];
+      var vincita = 0;
+      var dettagli = [];
+      if(p.colore === colEstratto){
+        if(p.colore){
+          vincita = vincita + p.puntataColore * 2;
+          dettagli.push('colore indovinato (+' + (p.puntataColore*2) + ')');
+        }
+      }
+      if(p.runa === runaEstratta){
+        if(p.runa){
+          vincita = vincita + p.puntataRuna * 24;
+          dettagli.push('runa indovinata (+' + (p.puntataRuna*24) + ')');
+        }
+      }
+      if(vincita > 0){
+        righe = righe + '<br><span class="vincitore">' + p.nome + ' vince ' + vincita + ' Galeoni</span> — ' + dettagli.join(', ');
+      } else {
+        righe = righe + '<br>' + p.nome + ' non vince nulla.';
+      }
+    }
+
+    aggiungiLog(log, righe);
+  });
+}
+
+/* ============================================================
+   AVVIO
+   ============================================================ */
+
+costruisciInterfaccia();
+
+})();
+</script>
+</body>
+</html>
