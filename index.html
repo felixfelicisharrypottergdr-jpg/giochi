@@ -105,7 +105,7 @@
     margin-bottom:8px;
   }
   label{font-size:0.85em;color:#ccc;}
-  input[type=text], input[type=number], select{
+  input[type=text], input[type=password], input[type=number], select{
     background:#1f1f1f;
     color:var(--testo);
     border:1px solid #555;
@@ -217,7 +217,55 @@
 
 <main id="area-giochi"></main>
 
-<footer>Strumento generato per uso interno al gioco di ruolo — tira, gioca, diverti* comodamente da qui.</footer>
+<footer>Strumento generato per uso interno al gioco di ruolo — tira, gioca e divertiti comodamente da qui.</footer>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCvd56bSEL02s2OY2PSk7uyFX-CYRB4Vz0",
+    authDomain: "conteggi-eee1b.firebaseapp.com",
+    projectId: "conteggi-eee1b",
+    storageBucket: "conteggi-eee1b.firebasestorage.app",
+    messagingSenderId: "481320219586",
+    appId: "1:481320219586:web:87e974d618a302adfadc5b"
+  };
+
+  /* App Firebase nominata: non interferisce con l'accesso Email/Password
+     del tool Narratore anche se le due pagine sono aperte sullo stesso dominio. */
+  const gmApp = initializeApp(firebaseConfig, "giochi-magici");
+  const gmAuth = getAuth(gmApp);
+  const gmFunctions = getFunctions(gmApp, "europe-west1");
+
+  let authPromise = null;
+  function ensureAnonymous(){
+    if(gmAuth.currentUser){ return Promise.resolve(gmAuth.currentUser); }
+    if(!authPromise){
+      authPromise = signInAnonymously(gmAuth).then(c => c.user).finally(() => { authPromise = null; });
+    }
+    return authPromise;
+  }
+
+  window.gmApi = {
+    ready: new Promise((resolve, reject) => {
+      let resolved = false;
+      const unsubscribe = onAuthStateChanged(gmAuth, user => {
+        if(resolved) return;
+        resolved = true;
+        unsubscribe();
+        (user ? Promise.resolve(user) : ensureAnonymous()).then(resolve).catch(reject);
+      }, reject);
+    }),
+    call: async function(name, data){
+      await ensureAnonymous();
+      const fn = httpsCallable(gmFunctions, name);
+      const res = await fn(data || {});
+      return res.data;
+    }
+  };
+</script>
 
 <script>
 (function(){
@@ -227,7 +275,32 @@
    ============================================================ */
 
 function tira(facce){
+  facce = Number(facce);
+  if(!Number.isFinite(facce) || Math.floor(facce) !== facce || facce < 1){ facce = 1; }
   return Math.floor(Math.random() * facce) + 1;
+}
+
+function leggiIntero(input, fallback, minimo, massimo){
+  var raw = input ? String(input.value).trim() : '';
+  if(!/^-?\d+$/.test(raw)){
+    if(input){ input.value = String(fallback); }
+    return fallback;
+  }
+  var n = Number(raw);
+  if(!Number.isSafeInteger(n)){ n = fallback; }
+  if(minimo !== undefined && n < minimo){ n = minimo; }
+  if(massimo !== undefined && n > massimo){ n = massimo; }
+  if(input){ input.value = String(n); }
+  return n;
+}
+
+function testoHtml(valore){
+  return String(valore === undefined || valore === null ? '' : valore)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function creaEl(tag, classi, testo){
@@ -257,6 +330,50 @@ function svuota(elemento){
 function testoDado(valore){
   return '<span class="dado">' + valore + '</span>';
 }
+
+function gmChiama(nome, dati){
+  if(!window.gmApi || !window.gmApi.call){
+    return Promise.reject(new Error('Firebase dei Giochi Magici non è ancora pronto.'));
+  }
+  return window.gmApi.call(nome, dati || {});
+}
+
+function gmErroreTesto(err){
+  var msg = err && err.message ? String(err.message) : 'Operazione non riuscita.';
+  msg = msg.replace(/^FirebaseError:\s*/i,'').replace(/^\[functions\/[\w-]+\]\s*/i,'');
+  return msg;
+}
+
+function gmSetMessaggio(el, testo, errore){
+  if(!el){ return; }
+  el.className = errore ? 'avviso' : 'nota';
+  el.textContent = testo || '';
+}
+
+function gmCampoPassword(id, placeholder){
+  var input = creaEl('input');
+  input.type = 'password';
+  input.id = id;
+  input.placeholder = placeholder || 'Parola d\'ordine della partita';
+  input.autocomplete = 'current-password';
+  return input;
+}
+
+function gmSelectPartecipante(select, players){
+  svuota(select);
+  for(var i=0;i<players.length;i++){
+    var opt = document.createElement('option');
+    opt.value = players[i].id;
+    opt.textContent = players[i].name + (players[i].claimed ? ' — accesso già impostato' : ' — primo accesso');
+    select.appendChild(opt);
+  }
+}
+
+function gmCartaTesto(c){
+  if(!c){ return ''; }
+  return c.name || ((c.number || '') + (c.color ? ' ' + c.color : ''));
+}
+
 
 /* Gestione elenco giocatori generico: nome + campi extra opzionali */
 function creaGestoreGiocatori(contenitoreLista, campiExtra){
@@ -415,10 +532,10 @@ function initBurrobirra(pannello){
   var bottone = pannello.querySelector('#bb-gioca');
 
   aggancia(bottone, function(){
-    var nomeA = pannello.querySelector('#bb-nomeA').value || 'Squadra A';
-    var nomeB = pannello.querySelector('#bb-nomeB').value || 'Squadra B';
-    var destA = parseInt(pannello.querySelector('#bb-destA').value, 10) || 1;
-    var destB = parseInt(pannello.querySelector('#bb-destB').value, 10) || 1;
+    var nomeA = testoHtml(pannello.querySelector('#bb-nomeA').value || 'Squadra A');
+    var nomeB = testoHtml(pannello.querySelector('#bb-nomeB').value || 'Squadra B');
+    var destA = leggiIntero(pannello.querySelector('#bb-destA'), 1, 1);
+    var destB = leggiIntero(pannello.querySelector('#bb-destB'), 1, 1);
 
     var vittorieA = 0;
     var vittorieB = 0;
@@ -497,7 +614,7 @@ function initCavalli(pannello){
     var nome = pannello.querySelector('#cv-nome').value.trim();
     if(!nome){ nome = 'Giocatore ' + (gestore.lista().length + 1); }
     var cavallo = parseInt(selCavallo.value, 10);
-    var puntata = parseInt(pannello.querySelector('#cv-puntata').value, 10) || 0;
+    var puntata = leggiIntero(pannello.querySelector('#cv-puntata'), 0, 0);
     gestore.aggiungi({ nome:nome, cavallo:cavallo, puntata:puntata });
     pannello.querySelector('#cv-nome').value = '';
   });
@@ -517,7 +634,7 @@ function initCavalli(pannello){
     }
     function nomeCavallo(numero){
       var idx = numero - 1;
-      if(nomiCavalli[idx]){ return nomiCavalli[idx].trim() + ' (Cavallo ' + numero + ')'; }
+      if(nomiCavalli[idx]){ return testoHtml(nomiCavalli[idx].trim()) + ' (Cavallo ' + numero + ')'; }
       return 'Cavallo ' + numero;
     }
 
@@ -528,7 +645,7 @@ function initCavalli(pannello){
       for(var g=0; g<giocatori.length; g++){
         var esito = tira(7);
         punti[esito]++;
-        tiriGiro.push(giocatori[g].nome + '→' + testoDado(esito));
+        tiriGiro.push(testoHtml(giocatori[g].nome) + '→' + testoDado(esito));
       }
       dettaglioGiri = dettaglioGiri + '<br>Giro ' + giro + ': ' + tiriGiro.join(' | ');
     }
@@ -548,23 +665,24 @@ function initCavalli(pannello){
     }
 
     var righeVincite = '';
-    for(var v=0; v<vincitori.length; v++){
-      var numVinc = vincitori[v];
-      for(var gg=0; gg<giocatori.length; gg++){
-        if(giocatori[gg].cavallo === numVinc){
-          righeVincite = righeVincite + '<br><span class="vincitore">' + giocatori[gg].nome + ' vince ' + giocatori[gg].puntata + ' Galeoni</span> (scommessa su ' + nomeCavallo(numVinc) + ')';
-        }
-      }
-    }
-    if(!righeVincite){ righeVincite = '<br>Nessuno dei presenti aveva scommesso sul Cavallo vincitore.'; }
-
     var testoVincitori = '';
     for(var vv=0; vv<vincitori.length; vv++){
       if(vv>0){ testoVincitori = testoVincitori + ', '; }
       testoVincitori = testoVincitori + nomeCavallo(vincitori[vv]);
     }
 
-    aggiungiLog(log, '<b>Esito gara</b>' + dettaglioGiri + '<br><br><b>Classifica finale</b>' + righeClassifica + '<br><br><b>Vince: ' + testoVincitori + '</b>' + righeVincite);
+    if(vincitori.length === 1){
+      var numVinc = vincitori[0];
+      for(var gg=0; gg<giocatori.length; gg++){
+        if(giocatori[gg].cavallo === numVinc){
+          righeVincite = righeVincite + '<br><span class="vincitore">' + testoHtml(giocatori[gg].nome) + ' vince ' + giocatori[gg].puntata + ' Galeoni</span> (scommessa su ' + nomeCavallo(numVinc) + ')';
+        }
+      }
+      if(!righeVincite){ righeVincite = '<br>Nessuno dei presenti aveva scommesso sul Cavallo vincitore.'; }
+      aggiungiLog(log, '<b>Esito gara</b>' + dettaglioGiri + '<br><br><b>Classifica finale</b>' + righeClassifica + '<br><br><b>Vince: ' + testoVincitori + '</b>' + righeVincite);
+    } else {
+      aggiungiLog(log, '<b>Esito gara</b>' + dettaglioGiri + '<br><br><b>Classifica finale</b>' + righeClassifica + '<br><br><span class="esito"><b>Parita al primo posto:</b> ' + testoVincitori + '. Il regolamento qui riportato non stabilisce che tutti i Cavalli a pari punti vincano: risolvi la parita prima di assegnare le vincite delle scommesse.</span>');
+    }
   });
 }
 
@@ -581,6 +699,7 @@ function initDardi(pannello){
         '<label>Nome PG <input type="text" id="dg-nome"></label>' +
         '<label>Destrezza <input type="number" id="dg-destrezza" value="10" min="1"></label>' +
         '<button class="btn secondario piccolo" id="dg-aggiungi">Aggiungi giocatore</button>' +
+        '<button class="btn secondario piccolo" id="dg-nuova" disabled>Nuova partita</button>' +
       '</div>' +
     '</div>' +
     '<div id="dg-giocatori"></div>' +
@@ -588,7 +707,25 @@ function initDardi(pannello){
 
   var contenitoreGiocatori = pannello.querySelector('#dg-giocatori');
   var log = pannello.querySelector('#dg-log');
+  var bAggiungiDardi = pannello.querySelector('#dg-aggiungi');
+  var bNuovaPartita = pannello.querySelector('#dg-nuova');
   var giocatori = [];
+  var partitaConclusa = false;
+  var esitoRegistrato = false;
+
+  function partitaDardiIniziata(){
+    if(partitaConclusa){ return true; }
+    for(var i=0;i<giocatori.length;i++){
+      if(giocatori[i].dardiLanciati > 0){ return true; }
+    }
+    return false;
+  }
+
+  function aggiornaResetDardi(){
+    var iniziata = partitaDardiIniziata();
+    bAggiungiDardi.disabled = iniziata;
+    bNuovaPartita.disabled = !partitaConclusa || (giocatori.length > 1 && !esitoRegistrato);
+  }
 
   function dadoAnello(destrezza){
     if(destrezza <= 5){ return 50; }
@@ -606,6 +743,23 @@ function initDardi(pannello){
     return { nome:'Vuoto', molt:1, fine:false };
   }
 
+  function tuttiHannoFinito(){
+    if(giocatori.length === 0){ return false; }
+    for(var i=0;i<giocatori.length;i++){
+      if(giocatori[i].dardiLanciati < 5 && !giocatori[i].finito){ return false; }
+    }
+    return true;
+  }
+
+  function ricalcolaConclusione(){
+    partitaConclusa = false;
+    for(var i=0;i<giocatori.length;i++){
+      if(giocatori[i].finito){ partitaConclusa = true; break; }
+    }
+    if(!partitaConclusa && tuttiHannoFinito()){ partitaConclusa = true; }
+    if(!partitaConclusa){ esitoRegistrato = false; }
+  }
+
   function disegnaGiocatori(){
     svuota(contenitoreGiocatori);
     for(var i=0;i<giocatori.length;i++){
@@ -614,25 +768,27 @@ function initDardi(pannello){
         var box = creaEl('div', 'riquadro');
 
         var titolo = creaEl('div');
-        titolo.innerHTML = '<b>' + pg.nome + '</b> — Destrezza ' + pg.destrezza + ' (usa 1d' + dadoAnello(pg.destrezza) + ' per l\'anello) — Punteggio totale: <span class="esito">' + pg.punteggio + '</span> — Dardi lanciati: ' + pg.dardiLanciati + '/5' + (pg.finito ? ' <span class="successo">(PARTITA CONCLUSA - 501!)</span>' : '');
+        titolo.innerHTML = '<b>' + testoHtml(pg.nome) + '</b> — Destrezza ' + pg.destrezza + ' (usa 1d' + dadoAnello(pg.destrezza) + ' per l\'anello) — Punteggio totale: <span class="esito">' + pg.punteggio + '</span> — Dardi lanciati: ' + pg.dardiLanciati + '/5' + (pg.finito ? ' <span class="successo">(CENTRO PIENO - 501!)</span>' : '');
         box.appendChild(titolo);
 
         var bLancia = creaEl('button', 'btn piccolo', 'Lancia un Dardo');
-        if(pg.dardiLanciati >= 5 || pg.finito){
+        if(partitaConclusa || pg.dardiLanciati >= 5 || pg.finito){
           bLancia.disabled = true;
         }
         aggancia(bLancia, function(){
+          if(partitaConclusa){ return; }
           var facceAnello = dadoAnello(pg.destrezza);
           var tiroAnello = tira(facceAnello);
           var info = interpretaAnello(tiroAnello);
           pg.dardiLanciati++;
 
-          var riga = '<b>' + pg.nome + '</b> — Dardo ' + pg.dardiLanciati + ': 1d' + facceAnello + ' = ' + testoDado(tiroAnello) + ' → ' + info.nome;
+          var riga = '<b>' + testoHtml(pg.nome) + '</b> — Dardo ' + pg.dardiLanciati + ': 1d' + facceAnello + ' = ' + testoDado(tiroAnello) + ' → ' + info.nome;
 
           if(info.fine){
             pg.punteggio = 501;
             pg.finito = true;
-            riga = riga + ' <span class="successo">CENTRO PIENO! 501 punti, partita conclusa.</span>';
+            partitaConclusa = true;
+            riga = riga + ' <span class="successo">CENTRO PIENO! 501 punti: la partita termina immediatamente.</span>';
           } else {
             var tiroSpicchio = tira(20);
             var puntiOttenuti = tiroSpicchio * info.molt;
@@ -640,14 +796,19 @@ function initDardi(pannello){
             riga = riga + ' — spicchio 1d20 = ' + testoDado(tiroSpicchio) + ' → ' + puntiOttenuti + ' punti (spicchio x' + info.molt + ')';
           }
 
+          if(!partitaConclusa && tuttiHannoFinito()){ partitaConclusa = true; }
           aggiungiLog(log, riga);
           disegnaGiocatori();
         });
         box.appendChild(bLancia);
 
         var bRimuovi = creaEl('button', 'btn rimuovi piccolo', 'Rimuovi giocatore');
+        bRimuovi.disabled = partitaDardiIniziata();
         aggancia(bRimuovi, function(){
+          if(partitaDardiIniziata()){ return; }
           giocatori.splice(idx,1);
+          esitoRegistrato = false;
+          ricalcolaConclusione();
           disegnaGiocatori();
         });
         box.appendChild(bRimuovi);
@@ -656,29 +817,53 @@ function initDardi(pannello){
       })(i);
     }
 
-    if(giocatori.length > 1){
+    if(!esitoRegistrato && giocatori.length > 1 && (partitaConclusa || tuttiHannoFinito())){
       var bConfronta = creaEl('button', 'btn', 'Confronta punteggi e decreta il vincitore');
       aggancia(bConfronta, function(){
-        var migliore = giocatori[0];
-        for(var i2=1;i2<giocatori.length;i2++){
-          if(giocatori[i2].punteggio > migliore.punteggio){ migliore = giocatori[i2]; }
+        if(esitoRegistrato){ return; }
+        esitoRegistrato = true;
+        var massimo = -1;
+        for(var i2=0;i2<giocatori.length;i2++){
+          if(giocatori[i2].punteggio > massimo){ massimo = giocatori[i2].punteggio; }
         }
-        aggiungiLog(log, '<span class="vincitore">Vince ' + migliore.nome + ' con ' + migliore.punteggio + ' punti!</span>');
+        var vincitori = [];
+        for(var j=0;j<giocatori.length;j++){
+          if(giocatori[j].punteggio === massimo){ vincitori.push(testoHtml(giocatori[j].nome)); }
+        }
+        if(vincitori.length === 1){
+          aggiungiLog(log, '<span class="vincitore">Vince ' + vincitori[0] + ' con ' + massimo + ' punti!</span>');
+        } else {
+          aggiungiLog(log, '<span class="esito">Parita a ' + massimo + ' punti tra ' + vincitori.join(', ') + '.</span>');
+        }
+        disegnaGiocatori();
       });
       contenitoreGiocatori.appendChild(bConfronta);
     }
+    aggiornaResetDardi();
   }
 
-  aggancia(pannello.querySelector('#dg-aggiungi'), function(){
+  aggancia(bNuovaPartita, function(){
+    if(bNuovaPartita.disabled){ return; }
+    giocatori = [];
+    partitaConclusa = false;
+    esitoRegistrato = false;
+    svuota(log);
+    disegnaGiocatori();
+  });
+
+  aggancia(bAggiungiDardi, function(){
+    if(partitaDardiIniziata()){
+      aggiungiLog(log, '<span class="avviso">La partita e gia iniziata: i partecipanti non possono cambiare dopo il primo Dardo. Usa «Nuova partita» dopo la conclusione per ricominciare.</span>');
+      return;
+    }
     var nome = pannello.querySelector('#dg-nome').value.trim();
     if(!nome){ nome = 'Giocatore ' + (giocatori.length + 1); }
-    var destrezza = parseInt(pannello.querySelector('#dg-destrezza').value, 10) || 1;
+    var destrezza = leggiIntero(pannello.querySelector('#dg-destrezza'), 1, 1);
     giocatori.push({ nome:nome, destrezza:destrezza, punteggio:0, dardiLanciati:0, finito:false });
     pannello.querySelector('#dg-nome').value = '';
     disegnaGiocatori();
   });
 }
-
 /* ============================================================
    4. GOBBIGLIE
    ============================================================ */
@@ -686,7 +871,7 @@ function initDardi(pannello){
 function initGobbiglie(pannello){
   pannello.innerHTML =
     '<h2>Gobbiglie</h2>' +
-    '<p class="intro">Al primo turno ogni PG lancia 7d9 per piazzare le proprie 7 Gobbiglie sugli anelli. Nei turni successivi si lancia (1-7)d9 per spostare le proprie Gobbiglie, oppure NdegreeSpostate d9 per colpire quelle avversarie (con rischio NdegreeSpostate d3 di retrocedere le proprie). Il punteggio va tenuto manualmente secondo la tabella qui sotto.</p>' +
+    '<p class="intro">Al primo turno ogni PG lancia 7d9 per piazzare le proprie 7 Gobbiglie sugli anelli. Nei turni successivi si lancia (1-7)d9 per spostare le proprie Gobbiglie, oppure N°Spostate d9 per colpire quelle avversarie (con rischio N°Spostate d3 di retrocedere le proprie). Il punteggio va tenuto manualmente secondo la tabella qui sotto.</p>' +
     '<div class="riquadro">' +
       '<b>Tabella punti (avanzamento)</b>' +
       '<table><tr><th>Movimento</th><th>Punti</th></tr>' +
@@ -736,7 +921,7 @@ function initGobbiglie(pannello){
   }
 
   aggancia(pannello.querySelector('#gb-piazza'), function(){
-    var nome = pannello.querySelector('#gb-nome1').value.trim() || 'PG';
+    var nome = testoHtml(pannello.querySelector('#gb-nome1').value.trim() || 'PG');
     var risultati = [];
     var righe = '';
     for(var i=0;i<7;i++){
@@ -749,8 +934,8 @@ function initGobbiglie(pannello){
   });
 
   aggancia(pannello.querySelector('#gb-sposta'), function(){
-    var nome = pannello.querySelector('#gb-nome2').value.trim() || 'PG';
-    var n = parseInt(pannello.querySelector('#gb-numero2').value, 10) || 1;
+    var nome = testoHtml(pannello.querySelector('#gb-nome2').value.trim() || 'PG');
+    var n = leggiIntero(pannello.querySelector('#gb-numero2'), 1, 1, 7);
     var righe = '';
     for(var i=0;i<n;i++){
       var r = tira(9);
@@ -760,8 +945,8 @@ function initGobbiglie(pannello){
   });
 
   aggancia(pannello.querySelector('#gb-colpisci'), function(){
-    var nome = pannello.querySelector('#gb-nome3').value.trim() || 'PG';
-    var n = parseInt(pannello.querySelector('#gb-numero3').value, 10) || 1;
+    var nome = testoHtml(pannello.querySelector('#gb-nome3').value.trim() || 'PG');
+    var n = leggiIntero(pannello.querySelector('#gb-numero3'), 1, 1, 7);
     var righeAvversario = '';
     for(var i=0;i<n;i++){
       var r = tira(9);
@@ -802,15 +987,34 @@ function initJackblack(pannello){
   var listaAttesa = pannello.querySelector('#jb-lista-attesa');
   var tavolo = pannello.querySelector('#jb-tavolo');
   var gestoreAttesa = creaGestoreGiocatori(listaAttesa, null);
+  var bAggiungiJackblack = pannello.querySelector('#jb-aggiungi');
+  var bNuovaManoJackblack = pannello.querySelector('#jb-nuova-mano');
 
   var mazzo = [];
   var partita = null; /* { banco:{}, giocatori:[...] } */
 
-  aggancia(pannello.querySelector('#jb-aggiungi'), function(){
+  function manoJackblackAttiva(){
+    return !!(partita && !partita.conclusa);
+  }
+
+  function aggiornaConfigurazioneJackblack(){
+    var attiva = manoJackblackAttiva();
+    bAggiungiJackblack.disabled = attiva;
+    bNuovaManoJackblack.disabled = attiva;
+    var rimuovi = listaAttesa.querySelectorAll('.rimuovi');
+    for(var r=0;r<rimuovi.length;r++){ rimuovi[r].disabled = attiva; }
+  }
+
+  aggancia(bAggiungiJackblack, function(){
+    if(manoJackblackAttiva()){
+      aggiungiLog(log, '<span class="avviso">Concludi prima la mano corrente: i partecipanti non possono cambiare durante la partita.</span>');
+      return;
+    }
     var nome = pannello.querySelector('#jb-nome').value.trim();
     if(!nome){ return; }
     gestoreAttesa.aggiungi({ nome:nome });
     pannello.querySelector('#jb-nome').value = '';
+    aggiornaConfigurazioneJackblack();
   });
 
   function calcolaTotale(carte){
@@ -821,7 +1025,7 @@ function initJackblack(pannello){
 
   function renderTavolo(){
     svuota(tavolo);
-    if(!partita){ return; }
+    if(!partita){ aggiornaConfigurazioneJackblack(); return; }
 
     var boxBanco = creaEl('div', 'riquadro');
     boxBanco.innerHTML = '<b>Banco</b> — Totale: <span class="esito">' + calcolaTotale(partita.banco.carte) + '</span>';
@@ -838,7 +1042,7 @@ function initJackblack(pannello){
         var box = creaEl('div', 'riquadro');
         var totale = calcolaTotale(pg.carte);
         var stato = pg.sforato ? '<span class="avviso">sforato</span>' : (pg.fermo ? '<span class="esito">sta</span>' : 'in gioco');
-        box.innerHTML = '<b>' + pg.nome + '</b> — Totale: <span class="esito">' + totale + '</span> — ' + stato;
+        box.innerHTML = '<b>' + testoHtml(pg.nome) + '</b> — Totale: <span class="esito">' + totale + '</span> — ' + stato;
 
         var mano = creaEl('div', 'mano');
         for(var c=0;c<pg.carte.length;c++){
@@ -853,11 +1057,11 @@ function initJackblack(pannello){
             var carta = mazzo.pop();
             pg.carte.push(carta);
             var nuovoTotale = calcolaTotale(pg.carte);
-            aggiungiLog(log, pg.nome + ' pesca ' + carta.nome + ' — totale: ' + nuovoTotale);
+            aggiungiLog(log, testoHtml(pg.nome) + ' pesca ' + carta.nome + ' — totale: ' + nuovoTotale);
             if(nuovoTotale > 21){
               pg.sforato = true;
               pg.fermo = true;
-              aggiungiLog(log, '<span class="avviso">' + pg.nome + ' sfora 21!</span>');
+              aggiungiLog(log, '<span class="avviso">' + testoHtml(pg.nome) + ' sfora 21!</span>');
             }
             renderTavolo();
           });
@@ -866,7 +1070,7 @@ function initJackblack(pannello){
           var bSta = creaEl('button', 'btn secondario piccolo', 'Sta');
           aggancia(bSta, function(){
             pg.fermo = true;
-            aggiungiLog(log, pg.nome + ' sta con ' + calcolaTotale(pg.carte) + '.');
+            aggiungiLog(log, testoHtml(pg.nome) + ' sta con ' + calcolaTotale(pg.carte) + '.');
             renderTavolo();
           });
           box.appendChild(bSta);
@@ -877,33 +1081,54 @@ function initJackblack(pannello){
     }
 
     var bTermina = creaEl('button', 'btn', 'Determina il vincitore');
+    var tuttiFermi = true;
+    for(var tf=0;tf<partita.giocatori.length;tf++){
+      if(!partita.giocatori[tf].fermo){ tuttiFermi = false; }
+    }
+    bTermina.disabled = !tuttiFermi || !!partita.conclusa;
     aggancia(bTermina, function(){
-      var migliore = null;
-      var migliorTotale = -1;
+      if(partita.conclusa){ return; }
+      partita.conclusa = true;
       var partecipanti = partita.giocatori.slice();
       partecipanti.push({ nome:'Banco', carte:partita.banco.carte, sforato:calcolaTotale(partita.banco.carte) > 21 });
+      var migliorTotale = -1;
+      var vincitori = [];
       for(var p=0;p<partecipanti.length;p++){
         var tot = calcolaTotale(partecipanti[p].carte);
         if(tot <= 21){
           if(tot > migliorTotale){
             migliorTotale = tot;
-            migliore = partecipanti[p];
+            vincitori = [testoHtml(partecipanti[p].nome)];
+          } else if(tot === migliorTotale){
+            vincitori.push(testoHtml(partecipanti[p].nome));
           }
         }
       }
-      if(migliore){
-        aggiungiLog(log, '<span class="vincitore">Vince ' + migliore.nome + ' con ' + migliorTotale + ' punti!</span>');
+      if(vincitori.length === 1){
+        aggiungiLog(log, '<span class="vincitore">Vince ' + vincitori[0] + ' con ' + migliorTotale + ' punti!</span>');
+      } else if(vincitori.length > 1){
+        aggiungiLog(log, '<span class="esito">Parita a ' + migliorTotale + ' punti tra ' + vincitori.join(', ') + '.</span>');
       } else {
         aggiungiLog(log, '<span class="avviso">Tutti hanno sforato 21: nessun vincitore.</span>');
       }
+      renderTavolo();
     });
     tavolo.appendChild(bTermina);
+    aggiornaConfigurazioneJackblack();
   }
 
-  aggancia(pannello.querySelector('#jb-nuova-mano'), function(){
+  aggancia(bNuovaManoJackblack, function(){
+    if(manoJackblackAttiva()){
+      aggiungiLog(log, '<span class="avviso">Concludi prima la mano corrente prima di distribuirne una nuova.</span>');
+      return;
+    }
     var giocatori = gestoreAttesa.lista();
     if(giocatori.length === 0){
       aggiungiLog(log, '<span class="avviso">Aggiungi almeno un giocatore prima di iniziare.</span>');
+      return;
+    }
+    if((giocatori.length + 1) * 2 > 52){
+      aggiungiLog(log, '<span class="avviso">Ci sono troppi giocatori per distribuire due carte a tutti e due carte al Banco con un solo mazzo.</span>');
       return;
     }
     mazzo = mescolaMazzo(nuovoMazzo52());
@@ -911,10 +1136,12 @@ function initJackblack(pannello){
     for(var i=0;i<giocatori.length;i++){
       partitaGiocatori.push({ nome:giocatori[i].nome, carte:[mazzo.pop(), mazzo.pop()], fermo:false, sforato:false });
     }
-    partita = { banco:{ carte:[mazzo.pop(), mazzo.pop()] }, giocatori:partitaGiocatori };
+    partita = { banco:{ carte:[mazzo.pop(), mazzo.pop()] }, giocatori:partitaGiocatori, conclusa:false };
     aggiungiLog(log, '<b>Nuova mano distribuita.</b>');
     renderTavolo();
   });
+
+  aggiornaConfigurazioneJackblack();
 }
 
 /* ============================================================
@@ -924,141 +1151,175 @@ function initJackblack(pannello){
 function initKnocker(pannello){
   pannello.innerHTML =
     '<h2>Knocker</h2>' +
-    '<p class="intro">Ogni giocatore riceve 5 carte coperte. Dopo il primo giro di puntate puo scartare fino a 3 carte per pescarne di nuove, poi si mostrano le mani. Il valutatore qui sotto riconosce automaticamente la combinazione di ciascuna mano.</p>' +
-    '<div class="riquadro">' +
-      '<div class="riga">' +
-        '<label>Nome giocatore <input type="text" id="kn-nome"></label>' +
-        '<button class="btn secondario piccolo" id="kn-aggiungi">Aggiungi giocatore</button>' +
-        '<button class="btn secondario piccolo" id="kn-distribuisci">Distribuisci le mani (5 carte a testa)</button>' +
-      '</div>' +
-    '</div>' +
-    '<ul class="giocatori" id="kn-lista-attesa"></ul>' +
-    '<div id="kn-tavolo"></div>' +
+    '<p class="intro">Partita privata: ogni PG vede soltanto le proprie 5 carte. Dopo il primo giro di puntate può scartare fino a 3 carte; il bluff e i tentativi di scoprirlo vengono gestiti in segreto dal sistema. Combinazioni ufficiali: Coppia, Doppia Coppia, Tris, Scala, Knocker, Scala Colore e Scala Reale.</p>' +
+    '<div class="riquadro"><h3 style="margin-top:0;color:var(--oro-chiaro)">Crea una nuova partita</h3>' +
+      '<div class="riga"><label>Numero PG <select id="kn-online-num"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>' +
+      '<button class="btn secondario piccolo" id="kn-online-imposta">Imposta partecipanti</button></div>' +
+      '<div id="kn-online-nomi"></div>' +
+      '<button class="btn" id="kn-online-crea">Crea partita privata</button>' +
+      '<div id="kn-online-crea-msg" class="nota"></div></div>' +
+    '<div class="riquadro"><h3 style="margin-top:0;color:var(--oro-chiaro)">Apri una partita esistente</h3>' +
+      '<div class="riga"><label>Codice partita <input type="text" id="kn-online-code" placeholder="Es. A7K4QXZ"></label>' +
+      '<button class="btn secondario piccolo" id="kn-online-apri">Apri</button></div>' +
+      '<div id="kn-online-session-msg" class="nota"></div></div>' +
+    '<div id="kn-online-session"></div>' +
     '<div class="log" id="kn-log"></div>';
 
   var log = pannello.querySelector('#kn-log');
-  var listaAttesa = pannello.querySelector('#kn-lista-attesa');
-  var tavolo = pannello.querySelector('#kn-tavolo');
-  var gestoreAttesa = creaGestoreGiocatori(listaAttesa, null);
-  var mazzo = [];
-  var mani = [];
+  var num = pannello.querySelector('#kn-online-num');
+  var nomiBox = pannello.querySelector('#kn-online-nomi');
+  var sessionBox = pannello.querySelector('#kn-online-session');
+  var createMsg = pannello.querySelector('#kn-online-crea-msg');
+  var sessionMsg = pannello.querySelector('#kn-online-session-msg');
+  var currentSession = null;
+  var myPlayer = null;
 
-  aggancia(pannello.querySelector('#kn-aggiungi'), function(){
-    var nome = pannello.querySelector('#kn-nome').value.trim();
-    if(!nome){ return; }
-    gestoreAttesa.aggiungi({ nome:nome });
-    pannello.querySelector('#kn-nome').value = '';
-  });
+  function disegnaNomi(){
+    svuota(nomiBox);
+    var n = parseInt(num.value,10) || 2;
+    for(var i=0;i<n;i++){
+      var lab = creaEl('label',null,'PG ' + (i+1));
+      var input = creaEl('input'); input.type='text'; input.id='kn-online-pg-'+i; input.placeholder='Nome del PG';
+      lab.appendChild(input); nomiBox.appendChild(lab);
+    }
+  }
+  disegnaNomi();
+  aggancia(pannello.querySelector('#kn-online-imposta'), disegnaNomi);
+  num.addEventListener('change', disegnaNomi);
 
-  function valutaMano(carte){
-    var valori = [];
-    var semi = [];
-    for(var i=0;i<carte.length;i++){
-      valori.push(carte[i].valore);
-      semi.push(carte[i].seme);
+  function leggiNomi(){
+    var out=[]; var n=parseInt(num.value,10)||2;
+    for(var i=0;i<n;i++){
+      var v=(pannello.querySelector('#kn-online-pg-'+i).value||'').trim();
+      if(!v){ return null; } out.push(v);
     }
-    var conteggio = {};
-    for(var v=0;v<valori.length;v++){
-      var chiave = valori[v];
-      conteggio[chiave] = (conteggio[chiave] || 0) + 1;
-    }
-    var gruppi = [];
-    for(var k in conteggio){
-      if(Object.prototype.hasOwnProperty.call(conteggio,k)){
-        gruppi.push(conteggio[k]);
-      }
-    }
-    gruppi.sort(function(a,b){ return b-a; });
-
-    var stessoSeme = true;
-    for(var s=1;s<semi.length;s++){
-      if(semi[s] !== semi[0]){ stessoSeme = false; }
-    }
-
-    var ordinati = valori.slice().sort(function(a,b){ return a-b; });
-    var scala = true;
-    for(var o=1;o<ordinati.length;o++){
-      if(ordinati[o] !== ordinati[o-1] + 1){ scala = false; }
-    }
-
-    var scalaReale = false;
-    if(stessoSeme){
-      var attesi = [9,10,11,12,13];
-      scalaReale = true;
-      for(var e=0;e<5;e++){
-        if(ordinati[e] !== attesi[e]){ scalaReale = false; }
-      }
-    }
-
-    if(scalaReale){ return 'Scala Reale'; }
-    if(scala){
-      if(stessoSeme){ return 'Scala Colore'; }
-    }
-    if(gruppi[0] === 4){ return 'Knocker (Poker)'; }
-    if(gruppi[0] === 3){ return 'Tris'; }
-    if(scala){ return 'Scala'; }
-    if(gruppi[0] === 2){
-      if(gruppi[1] === 2){ return 'Doppia Coppia'; }
-      return 'Coppia';
-    }
-    return 'Carta Alta';
+    return out;
   }
 
-  function renderTavolo(){
-    svuota(tavolo);
-    for(var i=0;i<mani.length;i++){
-      (function(idx){
-        var m = mani[idx];
-        var box = creaEl('div', 'riquadro');
-        box.innerHTML = '<b>' + m.nome + '</b>';
-        var manoDiv = creaEl('div', 'mano');
-        for(var c=0;c<m.carte.length;c++){
-          manoDiv.appendChild(creaEl('span', 'carta', m.carte[c].nome));
-        }
-        box.appendChild(manoDiv);
+  aggancia(pannello.querySelector('#kn-online-crea'), function(){
+    var names=leggiNomi();
+    if(!names){ gmSetMessaggio(createMsg,'Inserisci il nome di tutti i PG.',true); return; }
+    gmSetMessaggio(createMsg,'Creazione in corso…',false);
+    gmChiama('createGameSession',{gameType:'knocker',players:names}).then(function(res){
+      pannello.querySelector('#kn-online-code').value=res.code;
+      gmSetMessaggio(createMsg,'Partita creata. Codice: '+res.code+'. Comunicalo agli altri partecipanti.',false);
+      return caricaSessione(res.code);
+    }).catch(function(e){ gmSetMessaggio(createMsg,gmErroreTesto(e),true); });
+  });
 
-        var risultato = creaEl('div', 'esito', 'Combinazione: ' + valutaMano(m.carte));
-        box.appendChild(risultato);
+  aggancia(pannello.querySelector('#kn-online-apri'), function(){ caricaSessione(pannello.querySelector('#kn-online-code').value); });
 
-        tavolo.appendChild(box);
-      })(i);
-    }
+  function caricaSessione(code){
+    code=String(code||'').trim().toUpperCase();
+    if(!code){ gmSetMessaggio(sessionMsg,'Inserisci il codice della partita.',true); return Promise.resolve(); }
+    myPlayer=null;
+    gmSetMessaggio(sessionMsg,'Caricamento…',false);
+    return gmChiama('getGameSession',{code:code}).then(function(s){
+      if(s.gameType!=='knocker'){ throw new Error('Il codice appartiene a un altro gioco.'); }
+      currentSession=s; pannello.querySelector('#kn-online-code').value=s.code;
+      gmSetMessaggio(sessionMsg,'Partita '+s.code+' caricata.',false); renderSession();
+    }).catch(function(e){ currentSession=null; svuota(sessionBox); gmSetMessaggio(sessionMsg,gmErroreTesto(e),true); });
+  }
 
-    if(mani.length > 0){
-      var bMostra = creaEl('button', 'btn', 'Mostra il vincitore (Showdown)');
-      var ORDINE = ['Carta Alta','Coppia','Doppia Coppia','Tris','Scala','Knocker (Poker)','Scala Colore','Scala Reale'];
-      aggancia(bMostra, function(){
-        var migliore = mani[0];
-        var migliorRango = ORDINE.indexOf(valutaMano(migliore.carte));
-        for(var j=1;j<mani.length;j++){
-          var rango = ORDINE.indexOf(valutaMano(mani[j].carte));
-          if(rango > migliorRango){
-            migliorRango = rango;
-            migliore = mani[j];
-          }
-        }
-        aggiungiLog(log, '<span class="vincitore">Vince ' + migliore.nome + ' con: ' + ORDINE[migliorRango] + '</span>');
+  function renderSession(){
+    svuota(sessionBox); if(!currentSession){return;}
+    var info=creaEl('div','riquadro');
+    info.innerHTML='<b>Partita '+testoHtml(currentSession.code)+'</b><br>Fase: '+testoHtml((currentSession.publicState&&currentSession.publicState.phase)||'—');
+    var st=[]; for(var i=0;i<currentSession.players.length;i++){st.push(testoHtml(currentSession.players[i].name)+(currentSession.players[i].claimed?' ✓':''));}
+    info.innerHTML += '<br>Partecipanti: '+st.join(', ');
+    sessionBox.appendChild(info);
+
+    if(!myPlayer){
+      var access=creaEl('div','riquadro');
+      access.appendChild(creaEl('h3',null,'Entra come il tuo PG'));
+      var sel=creaEl('select'); gmSelectPartecipante(sel,currentSession.players); access.appendChild(sel);
+      var pass=gmCampoPassword('kn-online-pass'); access.appendChild(creaEl('label',null,'Parola d\'ordine di questa partita')); access.appendChild(pass);
+      access.appendChild(creaEl('div','nota','Al primo accesso scegli tu la parola d\'ordine. Negli accessi successivi inserisci la stessa. Se la dimentichi, il Narratore può azzerarla senza vedere le tue carte.'));
+      var stats=creaEl('div','riga');
+      function statCampo(id,label){var w=creaEl('label',null,label+' ');var x=creaEl('input');x.type='number';x.min='1';x.value='10';x.id=id;w.appendChild(x);return w;}
+      stats.appendChild(statCampo('kn-stat-vol','Volontà')); stats.appendChild(statCampo('kn-stat-acu','Acume')); stats.appendChild(statCampo('kn-stat-per','Percezione'));
+      access.appendChild(stats); access.appendChild(creaEl('div','nota','I tre valori servono solo al primo accesso del PG e vengono poi congelati per questa partita.'));
+      var msg=creaEl('div','nota'); var b=creaEl('button','btn','Accedi / imposta parola d\'ordine');
+      aggancia(b,function(){
+        b.disabled=true; gmSetMessaggio(msg,'Verifica in corso…',false);
+        var pid=sel.value;
+        gmChiama('claimGamePlayer',{code:currentSession.code,playerId:pid,password:pass.value,stats:{volonta:leggiIntero(pannello.querySelector('#kn-stat-vol'),10,1,100),acume:leggiIntero(pannello.querySelector('#kn-stat-acu'),10,1,100),percezione:leggiIntero(pannello.querySelector('#kn-stat-per'),10,1,100)}}).then(function(res){
+          myPlayer=res.player; gmSetMessaggio(msg,res.firstSetup?'Parola d\'ordine impostata. Accesso riuscito.':'Accesso riuscito.',false); return aggiornaPrivato();
+        }).catch(function(e){b.disabled=false;gmSetMessaggio(msg,gmErroreTesto(e),true);});
       });
-      tavolo.appendChild(bMostra);
+      access.appendChild(b); access.appendChild(msg); sessionBox.appendChild(access);
+    } else {
+      aggiornaPrivato();
     }
   }
 
-  aggancia(pannello.querySelector('#kn-distribuisci'), function(){
-    var giocatori = gestoreAttesa.lista();
-    if(giocatori.length === 0){
-      aggiungiLog(log, '<span class="avviso">Aggiungi almeno un giocatore prima di distribuire.</span>');
-      return;
+  function aggiornaPrivato(){
+    if(!myPlayer||!currentSession){return Promise.resolve();}
+    return gmChiama('getMyGameState',{code:currentSession.code,playerId:myPlayer.id}).then(function(state){
+      currentSession.players=state.players; currentSession.publicState=state.publicState; currentSession.status=state.status;
+      renderPrivate(state);
+    }).catch(function(e){gmSetMessaggio(sessionMsg,gmErroreTesto(e),true);});
+  }
+
+  function renderPrivate(state){
+    svuota(sessionBox);
+    var top=creaEl('div','riquadro');
+    top.innerHTML='<b>Partita '+testoHtml(state.code)+' — '+testoHtml(state.player.name)+'</b><br>Fase: '+testoHtml((state.publicState&&state.publicState.phase)||'—');
+    var refresh=creaEl('button','btn secondario piccolo','Aggiorna stato'); aggancia(refresh,aggiornaPrivato); top.appendChild(refresh); sessionBox.appendChild(top);
+
+    var showdown=state.publicState&&state.publicState.showdown;
+    if(showdown){
+      var sh=creaEl('div','riquadro'); sh.appendChild(creaEl('h3',null,'Showdown'));
+      for(var r=0;r<showdown.revealed.length;r++){
+        var rr=showdown.revealed[r], line=creaEl('div','mano');
+        line.appendChild(creaEl('b',null,rr.name+' — '+rr.combo.name+': '));
+        for(var rc=0;rc<rr.hand.length;rc++) line.appendChild(creaEl('span','carta',gmCartaTesto(rr.hand[rc])));
+        sh.appendChild(line);
+      }
+      sh.appendChild(creaEl('div',showdown.tie?'esito':'vincitore',showdown.tie?'Parità di combinazione più alta tra: '+showdown.winners.join(', '):'Vince '+showdown.winners[0]));
+      sessionBox.appendChild(sh); return;
     }
-    mazzo = mescolaMazzo(nuovoMazzo52());
-    mani = [];
-    for(var i=0;i<giocatori.length;i++){
-      var carte = [mazzo.pop(), mazzo.pop(), mazzo.pop(), mazzo.pop(), mazzo.pop()];
-      mani.push({ nome:giocatori[i].nome, carte:carte });
+
+    var priv=state.privateState||{};
+    var handBox=creaEl('div','riquadro'); handBox.appendChild(creaEl('h3',null,'La tua mano privata'));
+    var hand=Array.isArray(priv.hand)?priv.hand:[]; var checks=[]; var mano=creaEl('div','mano');
+    for(var i=0;i<hand.length;i++){
+      var lab=creaEl('label','carta');
+      if(!priv.exchangeDone && state.publicState.phase==='round1'){
+        var ch=creaEl('input');ch.type='checkbox';ch.value=i;lab.appendChild(ch);checks.push(ch);
+      }
+      lab.appendChild(document.createTextNode(' '+gmCartaTesto(hand[i]))); mano.appendChild(lab);
     }
-    aggiungiLog(log, '<b>Mani distribuite.</b> Ricordate di bussare sul dorso delle carte prima di puntare.');
-    renderTavolo();
-  });
+    handBox.appendChild(mano);
+    if(!priv.exchangeDone && state.publicState.phase==='round1'){
+      handBox.appendChild(creaEl('div','nota','Seleziona fino a 3 carte da cambiare. Nessuna selezione = confermi la mano senza scarti.'));
+      var ex=creaEl('button','btn','Conferma scarti / mano');
+      aggancia(ex,function(){var idx=[];for(var c=0;c<checks.length;c++)if(checks[c].checked)idx.push(Number(checks[c].value));if(idx.length>3){alert('Puoi scartare al massimo 3 carte.');return;}ex.disabled=true;gmChiama('knockerExchange',{code:state.code,playerId:state.player.id,discardIndexes:idx}).then(aggiornaPrivato).catch(function(e){ex.disabled=false;alert(gmErroreTesto(e));});});
+      handBox.appendChild(ex);
+    } else { handBox.appendChild(creaEl('div','nota','Mano confermata. Le carte restano visibili soltanto a te fino allo Showdown.')); }
+    sessionBox.appendChild(handBox);
+
+    var phase=state.publicState.phase;
+    if(phase==='round1'||phase==='round2'){
+      var bluff=creaEl('div','riquadro'); bluff.appendChild(creaEl('h3',null,phase==='round1'?'Bluff — primo giro di puntate':'Bluff — ultimo giro di puntate'));
+      bluff.appendChild(creaEl('div','nota','La scelta resta segreta: gli altri non vedono né se bluffi né chi prova a scoprirti.'));
+      var bm=creaEl('div','nota'); var yes=creaEl('button','btn piccolo','Sto bluffando'); var no=creaEl('button','btn secondario piccolo','Non sto bluffando');
+      function setBluff(v){yes.disabled=no.disabled=true;gmChiama('knockerSetBluff',{code:state.code,playerId:state.player.id,bluff:v}).then(function(){gmSetMessaggio(bm,'Scelta privata registrata per questo giro.',false);yes.disabled=no.disabled=false;}).catch(function(e){gmSetMessaggio(bm,gmErroreTesto(e),true);yes.disabled=no.disabled=false;});}
+      aggancia(yes,function(){setBluff(true);});aggancia(no,function(){setBluff(false);});bluff.appendChild(yes);bluff.appendChild(no);bluff.appendChild(bm);
+      var target=creaEl('select');for(var t=0;t<state.players.length;t++){if(state.players[t].id===state.player.id)continue;var op=document.createElement('option');op.value=state.players[t].id;op.textContent=state.players[t].name;target.appendChild(op);}bluff.appendChild(creaEl('label',null,'Prova a capire se sta bluffando'));bluff.appendChild(target);
+      var probe=creaEl('button','btn secondario','Tiro segreto Volontà vs Acume/Percezione'); var pres=creaEl('div','nota');
+      aggancia(probe,function(){probe.disabled=true;gmChiama('knockerProbeBluff',{code:state.code,playerId:state.player.id,targetPlayerId:target.value}).then(function(r){var txt='Tuo tiro 1d'+r.investigatorDie+': '+r.investigatorRoll+' — Volontà avversaria 1d'+r.blufferDie+': '+r.blufferRoll+'. ';if(r.success){txt+=r.bluff?'Riesci a capire che sta bluffando.':'Riesci a capire che non sta bluffando.';}else if(r.tie){txt+='Pareggio: non ottieni informazioni.';}else{txt+='Non riesci a capire se stia bluffando.';}gmSetMessaggio(pres,txt,false);probe.disabled=false;aggiornaPrivato();}).catch(function(e){gmSetMessaggio(pres,gmErroreTesto(e),true);probe.disabled=false;});});
+      bluff.appendChild(probe);bluff.appendChild(pres);
+      var insights=Array.isArray(priv.insights)?priv.insights:[];if(insights.length){var det=document.createElement('details');det.appendChild(creaEl('summary',null,'Esiti privati già ottenuti ('+insights.length+')'));for(var q=0;q<insights.length;q++){var x=insights[q];var txt=x.targetName+': '+(x.success?(x.bluff?'bluff':'non bluff'):'nessuna informazione')+' — '+x.investigatorRoll+' vs '+x.blufferRoll;det.appendChild(creaEl('div','nota',txt));}bluff.appendChild(det);}
+      sessionBox.appendChild(bluff);
+    }
+
+    if(state.publicState.phase==='round2'){
+      var sd=creaEl('button','btn','Avvia Showdown');aggancia(sd,function(){if(!confirm('Rivelare pubblicamente tutte le mani e determinare la combinazione più alta?'))return;sd.disabled=true;gmChiama('knockerShowdown',{code:state.code,playerId:state.player.id}).then(aggiornaPrivato).catch(function(e){sd.disabled=false;alert(gmErroreTesto(e));});});sessionBox.appendChild(sd);
+    }
+  }
 }
+
 
 /* ============================================================
    7. SLOT BROOMSTICK
@@ -1100,7 +1361,7 @@ function initSlot(pannello){
     var nome = pannello.querySelector('#sl-nome').value.trim();
     if(!nome){ return; }
     var indice = parseInt(selSimbolo.value, 10);
-    var puntata = parseInt(pannello.querySelector('#sl-puntata').value, 10) || 0;
+    var puntata = leggiIntero(pannello.querySelector('#sl-puntata'), 0, 0);
     gestore.aggiungi({ nome:nome, simbolo:indice, simboloTesto:SIMBOLI_SLOT[indice], puntata:puntata });
     pannello.querySelector('#sl-nome').value = '';
   });
@@ -1124,9 +1385,9 @@ function initSlot(pannello){
       if(occorrenze === 2){ vincita = pg.puntata * 2; }
       if(occorrenze === 3){ vincita = pg.puntata * 5; }
       if(vincita > 0){
-        righeVincite = righeVincite + '<br><span class="vincitore">' + pg.nome + ' vince ' + vincita + ' Galeoni</span> (' + occorrenze + ' su ' + pg.simboloTesto + ')';
+        righeVincite = righeVincite + '<br><span class="vincitore">' + testoHtml(pg.nome) + ' vince ' + vincita + ' Galeoni</span> (' + occorrenze + ' su ' + pg.simboloTesto + ')';
       } else {
-        righeVincite = righeVincite + '<br>' + pg.nome + ' non vince nulla.';
+        righeVincite = righeVincite + '<br>' + testoHtml(pg.nome) + ' non vince nulla.';
       }
     }
 
@@ -1157,101 +1418,39 @@ function coloreDaNumero(n){
 function initSparaschiocco(pannello){
   pannello.innerHTML =
     '<h2>Sparaschiocco</h2>' +
-    '<p class="intro">Verde batte Viola, Viola batte Blu, Blu batte Rosso, Rosso batte Verde. La Dorata puo essere battuta da qualsiasi colore. Distribuisci le mani in base al numero di giocatori (i numeri ripetuti vengono rilanciati automaticamente).</p>' +
-    '<div class="riquadro">' +
-      '<div class="riga">' +
-        '<label>Numero di giocatori</label>' +
-        '<select id="sp-numgiocatori"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>' +
-        '<button class="btn secondario piccolo" id="sp-imposta">Imposta nomi</button>' +
-      '</div>' +
-      '<div id="sp-nomi"></div>' +
-      '<button class="btn" id="sp-distribuisci">Distribuisci le carte</button>' +
-    '</div>' +
-    '<div id="sp-mani"></div>' +
-    '<div class="riquadro">' +
-      '<h3 style="margin-top:0;color:var(--oro-chiaro)">Carta che schiocca</h3>' +
-      '<label>Numero di carte in mano dell\'avversario <input type="number" id="sp-numcarte" value="10" min="1"></label>' +
-      '<button class="btn secondario" id="sp-schiocca">Lancia 1d(N carte) per stabilire quale carta schiocca</button>' +
-      '<div id="sp-esito-schiocco"></div>' +
-    '</div>' +
-    '<div class="log" id="sp-log"></div>';
+    '<p class="intro">La Dorata parte sempre a terra. Le 20 carte colorate vengono distribuite dal sistema senza duplicati e ogni PG può vedere soltanto la propria mano. Con 3 PG vengono date 6 carte a testa e 2 carte restano escluse casualmente e coperte per tutta la partita.</p>' +
+    '<div class="riquadro"><h3 style="margin-top:0;color:var(--oro-chiaro)">Crea una nuova partita</h3>' +
+      '<div class="riga"><label>Numero PG <select id="sp-numgiocatori"><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>' +
+      '<button class="btn secondario piccolo" id="sp-imposta">Imposta partecipanti</button></div><div id="sp-nomi"></div>' +
+      '<button class="btn" id="sp-distribuisci">Crea e distribuisci privatamente</button><div id="sp-crea-msg" class="nota"></div></div>' +
+    '<div class="riquadro"><h3 style="margin-top:0;color:var(--oro-chiaro)">Apri una partita esistente</h3>' +
+      '<div class="riga"><label>Codice partita <input type="text" id="sp-code" placeholder="Es. A7K4QXZ"></label><button class="btn secondario piccolo" id="sp-apri">Apri</button></div><div id="sp-session-msg" class="nota"></div></div>' +
+    '<div id="sp-mani"></div><div class="log" id="sp-log"></div>';
 
-  var log = pannello.querySelector('#sp-log');
-  var contenitoreNomi = pannello.querySelector('#sp-nomi');
-  var contenitoreMani = pannello.querySelector('#sp-mani');
-  var selNum = pannello.querySelector('#sp-numgiocatori');
+  var log=pannello.querySelector('#sp-log'), nomiBox=pannello.querySelector('#sp-nomi'), sessionBox=pannello.querySelector('#sp-mani'), selNum=pannello.querySelector('#sp-numgiocatori');
+  var createMsg=pannello.querySelector('#sp-crea-msg'), sessionMsg=pannello.querySelector('#sp-session-msg');
+  var currentSession=null,myPlayer=null;
 
-  function carteAssegnate(numGiocatori){
-    if(numGiocatori === 2){ return 10; }
-    if(numGiocatori === 3){ return 7; }
-    return 5;
+  function disegnaNomi(){svuota(nomiBox);var n=parseInt(selNum.value,10)||2;for(var i=0;i<n;i++){var l=creaEl('label',null,'PG '+(i+1));var x=creaEl('input');x.type='text';x.id='sp-pg-'+i;x.placeholder='Nome del PG';l.appendChild(x);nomiBox.appendChild(l);}}
+  disegnaNomi();aggancia(pannello.querySelector('#sp-imposta'),disegnaNomi);selNum.addEventListener('change',disegnaNomi);
+  function names(){var out=[],n=parseInt(selNum.value,10)||2;for(var i=0;i<n;i++){var v=(pannello.querySelector('#sp-pg-'+i).value||'').trim();if(!v)return null;out.push(v);}return out;}
+  aggancia(pannello.querySelector('#sp-distribuisci'),function(){var ns=names();if(!ns){gmSetMessaggio(createMsg,'Inserisci tutti i nomi.',true);return;}gmSetMessaggio(createMsg,'Distribuzione sicura in corso…',false);gmChiama('createGameSession',{gameType:'sparaschiocco',players:ns}).then(function(r){pannello.querySelector('#sp-code').value=r.code;gmSetMessaggio(createMsg,'Partita creata. Codice: '+r.code+'.',false);return load(r.code);}).catch(function(e){gmSetMessaggio(createMsg,gmErroreTesto(e),true);});});
+  aggancia(pannello.querySelector('#sp-apri'),function(){load(pannello.querySelector('#sp-code').value);});
+
+  function load(code){code=String(code||'').trim().toUpperCase();if(!code){gmSetMessaggio(sessionMsg,'Inserisci il codice.',true);return Promise.resolve();}myPlayer=null;gmSetMessaggio(sessionMsg,'Caricamento…',false);return gmChiama('getGameSession',{code:code}).then(function(s){if(s.gameType!=='sparaschiocco')throw new Error('Il codice appartiene a un altro gioco.');currentSession=s;pannello.querySelector('#sp-code').value=s.code;gmSetMessaggio(sessionMsg,'Partita '+s.code+' caricata.',false);renderSession();}).catch(function(e){currentSession=null;svuota(sessionBox);gmSetMessaggio(sessionMsg,gmErroreTesto(e),true);});}
+
+  function renderSession(){svuota(sessionBox);if(!currentSession)return;var inf=creaEl('div','riquadro');var ps=currentSession.publicState||{};inf.innerHTML='<b>Partita '+testoHtml(currentSession.code)+'</b><br>Dorata: a terra · '+ps.cardsEach+' carte colorate iniziali a testa'+(ps.excludedCount?' · '+ps.excludedCount+' carte coperte escluse':'');if(ps.lastCard)inf.innerHTML+='<br>Ultima carta giocata: <b>'+testoHtml(gmCartaTesto(ps.lastCard))+'</b>';if(ps.winner)inf.innerHTML+='<br><span class="vincitore">Vince '+testoHtml(ps.winner)+'</span>';sessionBox.appendChild(inf);
+    if(!myPlayer){var box=creaEl('div','riquadro');box.appendChild(creaEl('h3',null,'Entra come il tuo PG'));var sel=creaEl('select');gmSelectPartecipante(sel,currentSession.players);box.appendChild(sel);box.appendChild(creaEl('label',null,'Parola d\'ordine di questa partita'));var pass=gmCampoPassword('sp-pass');box.appendChild(pass);box.appendChild(creaEl('div','nota','Al primo accesso scegli la parola d\'ordine. Serve soltanto per questa partita.'));var m=creaEl('div','nota'),b=creaEl('button','btn','Accedi / imposta parola d\'ordine');aggancia(b,function(){b.disabled=true;gmChiama('claimGamePlayer',{code:currentSession.code,playerId:sel.value,password:pass.value}).then(function(r){myPlayer=r.player;return refresh();}).catch(function(e){b.disabled=false;gmSetMessaggio(m,gmErroreTesto(e),true);});});box.appendChild(b);box.appendChild(m);sessionBox.appendChild(box);}else refresh();}
+
+  function refresh(){if(!myPlayer)return Promise.resolve();return gmChiama('getMyGameState',{code:currentSession.code,playerId:myPlayer.id}).then(function(st){currentSession.players=st.players;currentSession.publicState=st.publicState;currentSession.status=st.status;renderPrivate(st);}).catch(function(e){gmSetMessaggio(sessionMsg,gmErroreTesto(e),true);});}
+
+  function renderPrivate(st){svuota(sessionBox);var ps=st.publicState||{};var top=creaEl('div','riquadro');top.innerHTML='<b>Partita '+testoHtml(st.code)+' — '+testoHtml(st.player.name)+'</b><br>Dorata a terra'+(ps.excludedCount?' · '+ps.excludedCount+' carte escluse e coperte':'');if(ps.lastCard)top.innerHTML+='<br>Ultima carta giocata: <b>'+testoHtml(gmCartaTesto(ps.lastCard))+'</b>';if(ps.lastEvent)top.innerHTML+='<br>'+testoHtml(ps.lastEvent);if(ps.winner)top.innerHTML+='<br><span class="vincitore">Vince '+testoHtml(ps.winner)+'</span>';var rb=creaEl('button','btn secondario piccolo','Aggiorna stato');aggancia(rb,refresh);top.appendChild(rb);sessionBox.appendChild(top);
+    var priv=st.privateState||{},hand=Array.isArray(priv.hand)?priv.hand:[];var hb=creaEl('div','riquadro');hb.appendChild(creaEl('h3',null,'La tua mano privata ('+hand.length+' carte)'));var md=creaEl('div','mano');for(var i=0;i<hand.length;i++){(function(idx){var c=hand[idx],span=creaEl('span','carta '+String(c.color||'').toLowerCase(),(idx+1)+'. '+gmCartaTesto(c));var play=creaEl('button','btn secondario piccolo','Gioca');aggancia(play,function(){if(!confirm('Segnare '+gmCartaTesto(c)+' come giocata nella role?'))return;play.disabled=true;gmChiama('sparaschioccoPlayCard',{code:st.code,playerId:st.player.id,cardIndex:idx}).then(refresh).catch(function(e){play.disabled=false;alert(gmErroreTesto(e));});});span.appendChild(play);md.appendChild(span);})(i);}hb.appendChild(md);if(!hand.length)hb.appendChild(creaEl('div','vincitore','Non hai più carte.'));sessionBox.appendChild(hb);
+    if(hand.length&&st.status==='active'){var sb=creaEl('div','riquadro');sb.appendChild(creaEl('h3',null,'Carta che schiocca'));sb.appendChild(creaEl('div','nota','Quando devi cedere una tua carta al PG successivo, il server esegue 1dN°CarteInMano e trasferisce direttamente la carta estratta senza mostrare le altre.'));var target=creaEl('select');for(var t=0;t<st.players.length;t++){if(st.players[t].id===st.player.id)continue;var o=document.createElement('option');o.value=st.players[t].id;o.textContent=st.players[t].name;target.appendChild(o);}sb.appendChild(target);var msg=creaEl('div','nota'),sch=creaEl('button','btn','Fai schioccare una mia carta');aggancia(sch,function(){sch.disabled=true;gmChiama('sparaschioccoTransferCard',{code:st.code,playerId:st.player.id,targetPlayerId:target.value}).then(function(r){gmSetMessaggio(msg,'1d'+hand.length+' → '+r.roll+': '+gmCartaTesto(r.moved)+' passa a '+r.target+'.',false);sch.disabled=false;return refresh();}).catch(function(e){sch.disabled=false;gmSetMessaggio(msg,gmErroreTesto(e),true);});});sb.appendChild(sch);sb.appendChild(msg);sessionBox.appendChild(sb);
+      var pen=creaEl('div','riquadro');pen.appendChild(creaEl('h3',null,'Penalità “Sparaschiocco!” dimenticato'));var psel=creaEl('select');for(var q=0;q<st.players.length;q++){var po=document.createElement('option');po.value=st.players[q].id;po.textContent=st.players[q].name;psel.appendChild(po);}pen.appendChild(psel);var pb=creaEl('button','btn secondario','Applica la penalità');var pm=creaEl('div','nota');aggancia(pb,function(){if(!confirm('Trasferire al PG scelto una carta casuale da ciascun altro partecipante?'))return;pb.disabled=true;gmChiama('sparaschioccoPenalty',{code:st.code,playerId:st.player.id,targetPlayerId:psel.value}).then(function(r){gmSetMessaggio(pm,r.target+' riceve '+r.movedCount+' carta/e di penalità.',false);pb.disabled=false;return refresh();}).catch(function(e){pb.disabled=false;gmSetMessaggio(pm,gmErroreTesto(e),true);});});pen.appendChild(pb);pen.appendChild(pm);sessionBox.appendChild(pen);}
   }
-
-  function disegnaCampiNomi(){
-    svuota(contenitoreNomi);
-    var n = parseInt(selNum.value, 10);
-    for(var i=0;i<n;i++){
-      var input = creaEl('input');
-      input.type = 'text';
-      input.placeholder = 'Nome giocatore ' + (i+1);
-      input.id = 'sp-pg-' + i;
-      input.value = 'Giocatore ' + (i+1);
-      contenitoreNomi.appendChild(input);
-    }
-  }
-  disegnaCampiNomi();
-  aggancia(pannello.querySelector('#sp-imposta'), disegnaCampiNomi);
-
-  aggancia(pannello.querySelector('#sp-distribuisci'), function(){
-    var n = parseInt(selNum.value, 10);
-    var carteATesta = carteAssegnate(n);
-    var nomi = [];
-    for(var i=0;i<n;i++){
-      var campo = pannello.querySelector('#sp-pg-' + i);
-      nomi.push(campo ? (campo.value.trim() || ('Giocatore ' + (i+1))) : ('Giocatore ' + (i+1)));
-    }
-
-    svuota(contenitoreMani);
-    for(var g=0; g<n; g++){
-      var numeriUsati = [];
-      var carte = [];
-      for(var c=0; c<carteATesta; c++){
-        var numero;
-        var ripeti = true;
-        while(ripeti){
-          numero = tira(20);
-          ripeti = false;
-          for(var u=0;u<numeriUsati.length;u++){
-            if(numeriUsati[u] === numero){ ripeti = true; }
-          }
-        }
-        numeriUsati.push(numero);
-        var col = coloreDaNumero(numero);
-        carte.push({ numero:numero, colore:col });
-      }
-      carte.sort(function(a,b){ return a.numero - b.numero; });
-
-      var box = creaEl('div', 'riquadro');
-      box.innerHTML = '<b>' + nomi[g] + '</b> (' + carteATesta + ' carte)';
-      var manoDiv = creaEl('div', 'mano');
-      for(var cc=0; cc<carte.length; cc++){
-        var span = creaEl('span', 'carta ' + carte[cc].colore.classe, carte[cc].numero + ' ' + carte[cc].colore.nome);
-        manoDiv.appendChild(span);
-      }
-      box.appendChild(manoDiv);
-      contenitoreMani.appendChild(box);
-    }
-
-    aggiungiLog(log, '<b>Distribuzione completata</b> per ' + n + ' giocatori (' + carteATesta + ' carte a testa, oltre alla Dorata iniziale).');
-  });
-
-  aggancia(pannello.querySelector('#sp-schiocca'), function(){
-    var numCarte = parseInt(pannello.querySelector('#sp-numcarte').value, 10) || 1;
-    var risultato = tira(numCarte);
-    pannello.querySelector('#sp-esito-schiocco').innerHTML = 'Schiocca la carta numero ' + testoDado(risultato) + ' (contando dalla numerazione assegnata a inizio partita).';
-    aggiungiLog(log, 'Tiro per lo schiocco (1d' + numCarte + '): ' + testoDado(risultato));
-  });
 }
+
 
 /* ============================================================
    9. TRIONFO
@@ -1262,82 +1461,23 @@ var SEMI_TRIONFO = ['Calici','Galeoni','Bacchette','Pugnali'];
 function initTrionfo(pannello){
   pannello.innerHTML =
     '<h2>Trionfo</h2>' +
-    '<p class="intro">Il PG che distribuisce lancia 1d4 per stabilire il seme di Trionfo, poi ogni giocatore riceve 3 carte tramite 3d12. Il punteggio finale corrisponde alla somma dei numeri delle carte vinte (max 24).</p>' +
-    '<div class="riquadro">' +
-      '<button class="btn" id="tr-seme">Lancia 1d4 per il seme di Trionfo</button>' +
-      '<div id="tr-esito-seme"></div>' +
-    '</div>' +
-    '<div class="riquadro">' +
-      '<div class="riga">' +
-        '<label>Nome giocatore/coppia <input type="text" id="tr-nome"></label>' +
-        '<button class="btn secondario piccolo" id="tr-aggiungi">Aggiungi giocatore</button>' +
-      '</div>' +
-    '</div>' +
-    '<ul class="giocatori" id="tr-lista"></ul>' +
-    '<button class="btn" id="tr-distribuisci">Distribuisci 3 carte a testa (3d12)</button>' +
-    '<div id="tr-mani"></div>' +
-    '<div class="log" id="tr-log"></div>';
+    '<p class="intro">Il Trionfo si gioca sempre fra due mani: 2 PG uno contro l’altro oppure 4 PG divisi in due coppie. Ogni mano riceve 3 carte nel primo turno e le 3 rimanenti nel secondo. Il seme di Trionfo e le distribuzioni vengono generati dal server; ciascun PG vede soltanto le carte della propria mano/coppia.</p>' +
+    '<div class="riquadro"><h3 style="margin-top:0;color:var(--oro-chiaro)">Crea una nuova partita</h3><label>Modalità <select id="tr-mode"><option value="2">2 PG</option><option value="4">4 PG — due coppie</option></select></label><button class="btn secondario piccolo" id="tr-imposta">Imposta partecipanti</button><div id="tr-nomi"></div><button class="btn" id="tr-crea">Crea partita privata</button><div id="tr-crea-msg" class="nota"></div></div>' +
+    '<div class="riquadro"><h3 style="margin-top:0;color:var(--oro-chiaro)">Apri una partita esistente</h3><div class="riga"><label>Codice partita <input type="text" id="tr-code" placeholder="Es. A7K4QXZ"></label><button class="btn secondario piccolo" id="tr-apri">Apri</button></div><div id="tr-session-msg" class="nota"></div></div>' +
+    '<div id="tr-mani"></div><div class="log" id="tr-log"></div>';
 
-  var log = pannello.querySelector('#tr-log');
-  var lista = pannello.querySelector('#tr-lista');
-  var gestore = creaGestoreGiocatori(lista, null);
-  var contenitoreMani = pannello.querySelector('#tr-mani');
-
-  function cartaDa12(n){
-    var indiceSeme = Math.floor((n-1) / 3);
-    var valore = ((n-1) % 3) + 1;
-    return { valore:valore, seme:SEMI_TRIONFO[indiceSeme], nome:valore + ' di ' + SEMI_TRIONFO[indiceSeme] };
-  }
-
-  aggancia(pannello.querySelector('#tr-seme'), function(){
-    var r = tira(4);
-    var seme = SEMI_TRIONFO[r-1];
-    pannello.querySelector('#tr-esito-seme').innerHTML = 'Seme di Trionfo: ' + testoDado(r) + ' → <b>' + seme + '</b>';
-    aggiungiLog(log, 'Seme di Trionfo estratto: <b>' + seme + '</b>');
-  });
-
-  aggancia(pannello.querySelector('#tr-aggiungi'), function(){
-    var nome = pannello.querySelector('#tr-nome').value.trim();
-    if(!nome){ return; }
-    gestore.aggiungi({ nome:nome });
-    pannello.querySelector('#tr-nome').value = '';
-  });
-
-  aggancia(pannello.querySelector('#tr-distribuisci'), function(){
-    var giocatori = gestore.lista();
-    if(giocatori.length === 0){
-      aggiungiLog(log, '<span class="avviso">Aggiungi almeno un giocatore prima di distribuire.</span>');
-      return;
-    }
-    svuota(contenitoreMani);
-    for(var g=0; g<giocatori.length; g++){
-      var carte = [];
-      var numeriUsati = [];
-      for(var c=0;c<3;c++){
-        var numero;
-        var ripeti = true;
-        while(ripeti){
-          numero = tira(12);
-          ripeti = false;
-          for(var u=0;u<numeriUsati.length;u++){
-            if(numeriUsati[u] === numero){ ripeti = true; }
-          }
-        }
-        numeriUsati.push(numero);
-        carte.push(cartaDa12(numero));
-      }
-      var box = creaEl('div', 'riquadro');
-      box.innerHTML = '<b>' + giocatori[g].nome + '</b>';
-      var manoDiv = creaEl('div', 'mano');
-      for(var cc=0;cc<carte.length;cc++){
-        manoDiv.appendChild(creaEl('span', 'carta', carte[cc].nome));
-      }
-      box.appendChild(manoDiv);
-      contenitoreMani.appendChild(box);
-    }
-    aggiungiLog(log, '<b>Carte distribuite</b> per il primo turno di Trionfo.');
-  });
+  var mode=pannello.querySelector('#tr-mode'),nomiBox=pannello.querySelector('#tr-nomi'),sessionBox=pannello.querySelector('#tr-mani'),createMsg=pannello.querySelector('#tr-crea-msg'),sessionMsg=pannello.querySelector('#tr-session-msg');var currentSession=null,myPlayer=null;
+  function fields(){svuota(nomiBox);if(mode.value==='2'){for(var i=0;i<2;i++){var l=creaEl('label',null,'PG '+(i+1));var x=creaEl('input');x.type='text';x.id='tr-pg-'+i;x.placeholder='Nome del PG';l.appendChild(x);nomiBox.appendChild(l);}}else{nomiBox.appendChild(creaEl('h4',null,'Coppia A'));for(var a=0;a<2;a++){var la=creaEl('label',null,'PG '+(a+1));var xa=creaEl('input');xa.type='text';xa.id='tr-pg-'+a;xa.placeholder='Nome del PG';la.appendChild(xa);nomiBox.appendChild(la);}nomiBox.appendChild(creaEl('h4',null,'Coppia B'));for(var b=2;b<4;b++){var lb=creaEl('label',null,'PG '+(b+1));var xb=creaEl('input');xb.type='text';xb.id='tr-pg-'+b;xb.placeholder='Nome del PG';lb.appendChild(xb);nomiBox.appendChild(lb);}}}
+  fields();aggancia(pannello.querySelector('#tr-imposta'),fields);mode.addEventListener('change',fields);
+  function names(){var n=mode.value==='4'?4:2,out=[];for(var i=0;i<n;i++){var v=(pannello.querySelector('#tr-pg-'+i).value||'').trim();if(!v)return null;out.push(v);}return out;}
+  aggancia(pannello.querySelector('#tr-crea'),function(){var ns=names();if(!ns){gmSetMessaggio(createMsg,'Inserisci tutti i nomi.',true);return;}gmSetMessaggio(createMsg,'Creazione e distribuzione in corso…',false);gmChiama('createGameSession',{gameType:'trionfo',trionfoMode:mode.value,players:ns}).then(function(r){pannello.querySelector('#tr-code').value=r.code;gmSetMessaggio(createMsg,'Partita creata. Codice: '+r.code+'.',false);return load(r.code);}).catch(function(e){gmSetMessaggio(createMsg,gmErroreTesto(e),true);});});
+  aggancia(pannello.querySelector('#tr-apri'),function(){load(pannello.querySelector('#tr-code').value);});
+  function load(code){code=String(code||'').trim().toUpperCase();if(!code){gmSetMessaggio(sessionMsg,'Inserisci il codice.',true);return Promise.resolve();}myPlayer=null;gmSetMessaggio(sessionMsg,'Caricamento…',false);return gmChiama('getGameSession',{code:code}).then(function(s){if(s.gameType!=='trionfo')throw new Error('Il codice appartiene a un altro gioco.');currentSession=s;pannello.querySelector('#tr-code').value=s.code;gmSetMessaggio(sessionMsg,'Partita '+s.code+' caricata.',false);renderSession();}).catch(function(e){currentSession=null;svuota(sessionBox);gmSetMessaggio(sessionMsg,gmErroreTesto(e),true);});}
+  function renderSession(){svuota(sessionBox);if(!currentSession)return;var ps=currentSession.publicState||{},inf=creaEl('div','riquadro');inf.innerHTML='<b>Partita '+testoHtml(currentSession.code)+'</b><br>Trionfo: '+testoDado(ps.trumpRoll)+' → <b>'+testoHtml(ps.trumpSuit)+'</b><br>Turno di carte: '+ps.round;sessionBox.appendChild(inf);if(!myPlayer){var box=creaEl('div','riquadro');box.appendChild(creaEl('h3',null,'Entra come il tuo PG'));var sel=creaEl('select');gmSelectPartecipante(sel,currentSession.players);box.appendChild(sel);box.appendChild(creaEl('label',null,'Parola d\'ordine di questa partita'));var pass=gmCampoPassword('tr-pass');box.appendChild(pass);box.appendChild(creaEl('div','nota','Se giochi in coppia, ciascun PG sceglie la propria parola d\'ordine ma entrambi vedono la stessa mano della coppia.'));var b=creaEl('button','btn','Accedi / imposta parola d\'ordine'),m=creaEl('div','nota');aggancia(b,function(){b.disabled=true;gmChiama('claimGamePlayer',{code:currentSession.code,playerId:sel.value,password:pass.value}).then(function(r){myPlayer=r.player;return refresh();}).catch(function(e){b.disabled=false;gmSetMessaggio(m,gmErroreTesto(e),true);});});box.appendChild(b);box.appendChild(m);sessionBox.appendChild(box);}else refresh();}
+  function refresh(){if(!myPlayer)return Promise.resolve();return gmChiama('getMyGameState',{code:currentSession.code,playerId:myPlayer.id}).then(function(st){currentSession.players=st.players;currentSession.publicState=st.publicState;renderPrivate(st);}).catch(function(e){gmSetMessaggio(sessionMsg,gmErroreTesto(e),true);});}
+  function renderPrivate(st){svuota(sessionBox);var ps=st.publicState||{},top=creaEl('div','riquadro');top.innerHTML='<b>Partita '+testoHtml(st.code)+' — '+testoHtml(st.player.name)+'</b>'+(st.player.side?'<br>Mano/Coppia '+testoHtml(st.player.side):'')+'<br>Seme di Trionfo: '+testoDado(ps.trumpRoll)+' → <b>'+testoHtml(ps.trumpSuit)+'</b><br>Turno: '+ps.round;var rb=creaEl('button','btn secondario piccolo','Aggiorna stato');aggancia(rb,refresh);top.appendChild(rb);sessionBox.appendChild(top);var hb=creaEl('div','riquadro');hb.appendChild(creaEl('h3',null,'Le carte private della tua '+(ps.mode==='4'?'coppia':'mano')));var hand=st.privateState&&Array.isArray(st.privateState.hand)?st.privateState.hand:[],md=creaEl('div','mano');for(var i=0;i<hand.length;i++)md.appendChild(creaEl('span','carta',gmCartaTesto(hand[i])));hb.appendChild(md);sessionBox.appendChild(hb);if(Number(ps.round)===1){var next=creaEl('button','btn','Distribuisci il secondo turno');aggancia(next,function(){if(!confirm('Usare le 6 carte rimaste per distribuire il secondo turno alle due mani?'))return;next.disabled=true;gmChiama('trionfoNextRound',{code:st.code,playerId:st.player.id}).then(refresh).catch(function(e){next.disabled=false;alert(gmErroreTesto(e));});});sessionBox.appendChild(next);}else sessionBox.appendChild(creaEl('div','nota','Secondo turno distribuito: tutte le 12 carte del mazzo sono state utilizzate, 6 per ciascuna mano nell’arco dei due turni.'));}
 }
+
 
 /* ============================================================
    10. SCACCHI DEI MAGHI
@@ -1346,7 +1486,7 @@ function initTrionfo(pannello){
 function initScacchi(pannello){
   pannello.innerHTML =
     '<h2>Scacchi dei Maghi</h2>' +
-    '<p class="intro">Ogni giocatore lancia NdegreePezzi dAcume (N deciso a inizio partita). I risultati piu alti confrontati a coppie stabiliscono chi distrugge il pezzo dell\'altro. Dopo 3 post si puo tentare lo scacco matto con 1d10 (successo con 10).</p>' +
+    '<p class="intro">Ogni giocatore lancia N°Pezzi dAcume (N deciso a inizio partita). I risultati piu alti confrontati a coppie stabiliscono chi distrugge il pezzo dell\'altro. Dopo 3 post si puo tentare lo scacco matto con 1d10 (successo con 10).</p>' +
     '<div class="riquadro">' +
       '<div class="riga">' +
         '<label>Giocatore A <input type="text" id="sc-nomeA" value="Giocatore A"></label>' +
@@ -1360,21 +1500,49 @@ function initScacchi(pannello){
         '<label>Pezzi mossi per post <input type="number" id="sc-pezzi" value="4" min="1" max="16"></label>' +
       '</div>' +
       '<button class="btn" id="sc-confronta">Lancia e confronta la mossa</button>' +
+      '<div class="nota" id="sc-contatore">Post giocati: 0/3 prima del primo tentativo di scacco matto.</div>' +
     '</div>' +
     '<div class="riquadro">' +
-      '<button class="btn secondario" id="sc-matto">Tenta lo scacco matto (dopo il 3° post, 1d10)</button>' +
+      '<button class="btn secondario" id="sc-matto" disabled>Tenta lo scacco matto (dopo il 3° post, 1d10)</button>' +
+      '<button class="btn secondario piccolo" id="sc-nuova" disabled>Nuova partita</button>' +
       '<div id="sc-esito-matto"></div>' +
     '</div>' +
     '<div class="log" id="sc-log"></div>';
 
   var log = pannello.querySelector('#sc-log');
+  var bConfronta = pannello.querySelector('#sc-confronta');
+  var bMatto = pannello.querySelector('#sc-matto');
+  var bNuovaScacchi = pannello.querySelector('#sc-nuova');
+  var campoNomeA = pannello.querySelector('#sc-nomeA');
+  var campoNomeB = pannello.querySelector('#sc-nomeB');
+  var campoAcumeA = pannello.querySelector('#sc-acumeA');
+  var campoAcumeB = pannello.querySelector('#sc-acumeB');
+  var campoPezzi = pannello.querySelector('#sc-pezzi');
+  var contatore = pannello.querySelector('#sc-contatore');
+  var postGiocati = 0;
+  var ultimoTentativoPost = 0;
+  var conclusa = false;
 
-  aggancia(pannello.querySelector('#sc-confronta'), function(){
-    var nomeA = pannello.querySelector('#sc-nomeA').value || 'Giocatore A';
-    var nomeB = pannello.querySelector('#sc-nomeB').value || 'Giocatore B';
-    var acumeA = parseInt(pannello.querySelector('#sc-acumeA').value, 10) || 1;
-    var acumeB = parseInt(pannello.querySelector('#sc-acumeB').value, 10) || 1;
-    var pezzi = parseInt(pannello.querySelector('#sc-pezzi').value, 10) || 1;
+  function aggiornaControlli(){
+    var iniziata = postGiocati > 0 || conclusa;
+    contatore.textContent = 'Post giocati: ' + postGiocati + (postGiocati < 3 ? '/3 prima del primo tentativo di scacco matto.' : '.');
+    bConfronta.disabled = conclusa;
+    campoNomeA.disabled = iniziata;
+    campoNomeB.disabled = iniziata;
+    campoAcumeA.disabled = iniziata;
+    campoAcumeB.disabled = iniziata;
+    campoPezzi.disabled = iniziata;
+    bMatto.disabled = conclusa || postGiocati < 3 || ultimoTentativoPost === postGiocati;
+    bNuovaScacchi.disabled = !conclusa;
+  }
+
+  aggancia(bConfronta, function(){
+    if(conclusa){ return; }
+    var nomeA = testoHtml(pannello.querySelector('#sc-nomeA').value || 'Giocatore A');
+    var nomeB = testoHtml(pannello.querySelector('#sc-nomeB').value || 'Giocatore B');
+    var acumeA = leggiIntero(pannello.querySelector('#sc-acumeA'), 1, 1);
+    var acumeB = leggiIntero(pannello.querySelector('#sc-acumeB'), 1, 1);
+    var pezzi = leggiIntero(pannello.querySelector('#sc-pezzi'), 1, 1, 16);
 
     var tiriA = [];
     var tiriB = [];
@@ -1382,6 +1550,8 @@ function initScacchi(pannello){
       tiriA.push(tira(acumeA));
       tiriB.push(tira(acumeB));
     }
+    tiriA.sort(function(a,b){ return b-a; });
+    tiriB.sort(function(a,b){ return b-a; });
 
     var puntiA = 0;
     var puntiB = 0;
@@ -1391,43 +1561,55 @@ function initScacchi(pannello){
       if(tiriA[j] > tiriB[j]){
         puntiA++;
         esito = nomeA + ' distrugge un pezzo';
+      } else if(tiriB[j] > tiriA[j]){
+        puntiB++;
+        esito = nomeB + ' distrugge un pezzo';
+      } else if(acumeA > acumeB){
+        puntiA++;
+        esito = 'parita nel tiro, vince ' + nomeA + ' per Acume superiore';
+      } else if(acumeB > acumeA){
+        puntiB++;
+        esito = 'parita nel tiro, vince ' + nomeB + ' per Acume superiore';
       } else {
-        if(tiriB[j] > tiriA[j]){
-          puntiB++;
-          esito = nomeB + ' distrugge un pezzo';
-        } else {
-          if(acumeA > acumeB){
-            puntiA++;
-            esito = 'parita nel tiro, vince ' + nomeA + ' per Acume superiore';
-          } else {
-            if(acumeB > acumeA){
-              puntiB++;
-              esito = 'parita nel tiro, vince ' + nomeB + ' per Acume superiore';
-            } else {
-              esito = 'parita totale, nessuno distrugge il pezzo';
-            }
-          }
-        }
+        esito = 'parita totale, nessuno distrugge il pezzo';
       }
       righe = righe + '<br>Pezzo ' + (j+1) + ': ' + nomeA + ' ' + testoDado(tiriA[j]) + ' vs ' + nomeB + ' ' + testoDado(tiriB[j]) + ' → ' + esito;
     }
 
-    aggiungiLog(log, '<b>Scontro dei pezzi</b>' + righe + '<br><br>Totale: ' + nomeA + ' distrugge ' + puntiA + ' pezzi, ' + nomeB + ' distrugge ' + puntiB + ' pezzi.');
+    postGiocati++;
+    aggiungiLog(log, '<b>Scontro dei pezzi — post ' + postGiocati + '</b>' + righe + '<br><br>Totale: ' + nomeA + ' distrugge ' + puntiA + ' pezzi, ' + nomeB + ' distrugge ' + puntiB + ' pezzi.');
+    aggiornaControlli();
   });
 
-  aggancia(pannello.querySelector('#sc-matto'), function(){
+  aggancia(bMatto, function(){
+    if(conclusa || postGiocati < 3 || ultimoTentativoPost === postGiocati){ return; }
+    ultimoTentativoPost = postGiocati;
     var r = tira(10);
     var esito = pannello.querySelector('#sc-esito-matto');
     if(r === 10){
+      conclusa = true;
       esito.innerHTML = testoDado(r) + ' — <span class="successo">SCACCO MATTO!</span>';
       aggiungiLog(log, 'Tentativo di scacco matto: ' + testoDado(r) + ' — <span class="successo">riuscito!</span>');
     } else {
-      esito.innerHTML = testoDado(r) + ' — nessuno scacco matto, la partita continua.';
+      esito.innerHTML = testoDado(r) + ' — nessuno scacco matto, la partita continua. Per ritentare serve un nuovo post di gioco.';
       aggiungiLog(log, 'Tentativo di scacco matto: ' + testoDado(r) + ' — fallito.');
     }
+    aggiornaControlli();
   });
-}
 
+
+  aggancia(bNuovaScacchi, function(){
+    if(!conclusa){ return; }
+    postGiocati = 0;
+    ultimoTentativoPost = 0;
+    conclusa = false;
+    pannello.querySelector('#sc-esito-matto').innerHTML = '';
+    svuota(log);
+    aggiornaControlli();
+  });
+
+  aggiornaControlli();
+}
 /* ============================================================
    11. RUNETTE
    ============================================================ */
@@ -1501,10 +1683,14 @@ function initRunette(pannello){
     var punteColore = pannello.querySelector('#rn-puntacolore').checked;
     var punteRuna = pannello.querySelector('#rn-puntaruna').checked;
     var colore = punteColore ? parseInt(pannello.querySelector('#rn-colore').value, 10) : 0;
-    var puntataColore = punteColore ? (parseInt(pannello.querySelector('#rn-puntatacolore').value, 10) || 0) : 0;
+    var puntataColore = punteColore ? leggiIntero(pannello.querySelector('#rn-puntatacolore'), 0, 0) : 0;
     var runa = punteRuna ? parseInt(selRuna.value, 10) : 0;
-    var puntataRuna = punteRuna ? (parseInt(pannello.querySelector('#rn-puntataruna').value, 10) || 0) : 0;
+    var puntataRuna = punteRuna ? leggiIntero(pannello.querySelector('#rn-puntataruna'), 0, 0) : 0;
 
+    if(!punteColore && !punteRuna){
+      aggiungiLog(log, '<span class="avviso">Seleziona almeno una puntata: colore e/o runa.</span>');
+      return;
+    }
     puntate.push({ nome:nome, colore:colore, puntataColore:puntataColore, runa:runa, puntataRuna:puntataRuna });
     pannello.querySelector('#rn-nome').value = '';
     render();
@@ -1537,9 +1723,9 @@ function initRunette(pannello){
         }
       }
       if(vincita > 0){
-        righe = righe + '<br><span class="vincitore">' + p.nome + ' vince ' + vincita + ' Galeoni</span> — ' + dettagli.join(', ');
+        righe = righe + '<br><span class="vincitore">' + testoHtml(p.nome) + ' vince ' + vincita + ' Galeoni</span> — ' + dettagli.join(', ');
       } else {
-        righe = righe + '<br>' + p.nome + ' non vince nulla.';
+        righe = righe + '<br>' + testoHtml(p.nome) + ' non vince nulla.';
       }
     }
 
